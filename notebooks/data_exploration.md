@@ -1,3 +1,12 @@
+<!-- #region -->
+# Data exploration and initial clustering.
+In this notebook, our reference universe will correspond to all authorized stocks within the **Natixis Investment Managers Challenge, 2021 edition**. It comprises over **2,000 companies** for which we retrieved ESG data for year 2020. 
+  
+
+ 
+Our goal is to use **Sustainable Finance Disclosure Regulation (SFDR)** metrics to perform clustering on these companies without using Refinitiv's own notation. Ultimately, we would like to build our own explainable score for the data.
+<!-- #endregion -->
+
 First, run all necessary imports.
 
 ```python
@@ -11,14 +20,14 @@ from sklearn.preprocessing import OneHotEncoder
 # Utils
 
 ## Data visualisation
-def boxplot(df, columns, categorical=True):
+def boxplot(df, columns, categorical=True, figsize=(10,8)):
     """
     Draw categorical boxplot for the series of your choice, excluding missing values. 
     """
     data = df.loc[:,columns].dropna()
     print(f"Boxplot for {len(data)} datapoints out of {len(df)} overall.")
     
-    fig, ax = plt.subplots(figsize=(10,8))
+    fig, ax = plt.subplots(figsize=figsize)
     plt.setp(ax.get_xticklabels(), rotation=45)
     if categorical == True:
         sns.boxplot(
@@ -32,11 +41,11 @@ def boxplot(df, columns, categorical=True):
             data=data
         )
         
-def countplot(df, category):
+def countplot(df, category, figsize=(10,6)):
     """ 
     Countplot for the category of your choice. 
     """
-    fig, ax = plt.subplots(figsize=(10,6))
+    fig, ax = plt.subplots(figsize=figsize)
     plt.setp(ax.get_xticklabels(), rotation=45)
     sns.countplot(
         x=category, 
@@ -154,7 +163,12 @@ sfdr_metrics = {
 
 ### Data exploration without using any ESG scoring.
 
+
+We exclude ESG notations by Refinitiv from our data exploration, as we will use them only later for verification purposes.  
+Note that Refinitiv adopts a **best-in-class** methodology, meaning that our clusters may not correspond to theirs as we run our analysis for all fields together. 
+
 ```python
+# Simply remove ESG notations for our analysis
 df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
 ```
 
@@ -162,24 +176,32 @@ df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy
 df.columns
 ```
 
+Let's observe the geographic repartition of our dataset.
+
 ```python
 countplot(df,"Country")
 ```
 
+The USA is over-represned in our dataset. We only have Western companies.
+
 ```python
-countplot(df,"GICS Sector Name")
+countplot(df,"GICS Sector Name", figsize=(8,8))
+```
+
+```python
+countplot(df,"Whistleblower Protection", (6,6))
 ```
 
 Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
-boxplot(df, columns, categorical=True)
+boxplot(df, columns, categorical=True, figsize=(10,6))
 ```
 
 ```python
 columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns, categorical=False)
+boxplot(df, columns, categorical=False, figsize=(6,6))
 ```
 
 ```python
@@ -208,10 +230,16 @@ boxplot(df, columns, categorical=True)
 (df.isna().sum().sort_values()/len(df))*100
 ```
 
+We first note that some metrics, although they are required by SFDR, suffer from particularly low coverage! This confirms observations by industry experts throughout our qualitative interviews.  
+For instance, carbon emissions total stands at approximately 50% missing datapoints, and water pollutant emissions to revenues information is practically unavaiable at 99% missing datapoints.
+
+
 Depending on the missing value strategy you want to put in place by column, change column names here:
 
 ```python
 sectors = list(df["GICS Sector Name"].value_counts().index)
+
+# Set value to median sector value. 
 median_strategy_cols = [
     "Board Gender Diversity, Percent",
     "CO2 Equivalent Emissions Total",
@@ -228,6 +256,7 @@ median_strategy_cols = [
     "Hazardous Waste",    
 ]
 
+# Assuming there is no policy in place, value set to zero. 
 conservative_cols = [
     "Anti-Personnel Landmines",
     "Fundamental Human Rights ILO UN",
@@ -237,6 +266,7 @@ conservative_cols = [
     "Bribery, Corruption and Fraud Controversies",
 ]
 
+# Drop these columns. 
 drop_cols = [
     "Water Pollutant Emissions To Revenues USD in million",
     "NACE Classification"
@@ -248,8 +278,10 @@ df_fillna = fillna(df, sectors, median_strategy_cols, conservative_cols, drop_co
 ```
 
 ```python
-df_fillna
+df_fillna.head()
 ```
+
+Then, define the columns to encode using a OneHotEncoder. 
 
 ```python
 categorical_cols = [
@@ -332,6 +364,10 @@ drop_cols = [
     "Critical Country 4",
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
+```
+
+```python
+cluster_df.columns
 ```
 
 We then scale our data and perform a 2-dimensional PCA to be able to visualise it later.
@@ -502,9 +538,6 @@ plt.title("PCA plot coloured by kmeans.")
 plt.show()
 ```
 
-- https://machinelearningmastery.com/clustering-algorithms-with-python/  
-- https://www.kdnuggets.com/2019/10/right-clustering-algorithm.html
-
 ```python
 X = pca_features
 ```
@@ -557,7 +590,7 @@ plt.show()
 
 ```python
 # define the model
-model = AffinityPropagation(damping=0.9)
+model = AffinityPropagation(damping=0.5)
 # fit the model
 model.fit(X)
 # assign a cluster to each example
@@ -571,7 +604,7 @@ for cluster in clusters:
     # create scatter of these samples
     plt.scatter(X[row_ix, 0], X[row_ix, 1])
 # show the plot
-plt.title("Affinity Propagation.")
+plt.title("Affinity Propagation")
 plt.show()
 ```
 
@@ -579,7 +612,7 @@ plt.show()
 
 ```python
 # define the model
-model = AgglomerativeClustering(n_clusters=4)
+model = AgglomerativeClustering(n_clusters=optimal_nb)
 # fit model and predict clusters
 yhat = model.fit_predict(X)
 # retrieve unique clusters
@@ -599,7 +632,7 @@ plt.show()
 
 ```python
 # define the model
-model = Birch(threshold=0.01, n_clusters=2)
+model = Birch(threshold=0.01, n_clusters=optimal_nb)
 # fit the model
 model.fit(X)
 # assign a cluster to each example
@@ -637,7 +670,7 @@ plt.title("DBSCAN")
 plt.show()
 ```
 
-#### Mean shift clustering
+#### Mean Shift clustering
 
 ```python
 # define the model
@@ -661,7 +694,7 @@ plt.show()
 
 ```python
 # define the model
-model = SpectralClustering(n_clusters=2)
+model = SpectralClustering(n_clusters=optimal_nb)
 # fit model and predict clusters
 yhat = model.fit_predict(X)
 # retrieve unique clusters
@@ -681,7 +714,7 @@ plt.show()
 
 ```python
 # define the model
-model = GaussianMixture(n_components=2)
+model = GaussianMixture(n_components=optimal_nb)
 # fit the model
 model.fit(X)
 # assign a cluster to each example
@@ -696,5 +729,72 @@ for cluster in clusters:
     plt.scatter(X[row_ix, 0], X[row_ix, 1])
 # show the plot
 plt.title("Gaussian Mixture")
+plt.show()
+```
+
+### Bibliography:
+- [PCA Analysis with Python](https://towardsdatascience.com/dive-into-pca-principal-component-analysis-with-python-43ded13ead21)
+- [Clustering Algorithms with Python - MachineLearningMastery](https://machinelearningmastery.com/clustering-algorithms-with-python/)
+- [10 Clustering Algorithms to know - KD Nuggets](https://www.kdnuggets.com/2019/10/right-clustering-algorithm.html)
+- [The Five Clustering Algorithms Dtaa Scientists need to know - Towards Data Science](https://towardsdatascience.com/the-5-clustering-algorithms-data-scientists-need-to-know-a36d136ef68)  
+- [Solving the Data Dilemma in ESG Quant Investing - Invest Summit](https://www.youtube.com/watch?v=OA4axeZ-DmY)
+- [Shades of Green: Investor Approaches to ESG - MSCI ](https://www.msci.com/perspectives-podcast/shades-of-green-investor-approaches-esg)
+- [More Regulators Pick up the ESG Baton - KPMG](https://home.kpmg/lu/en/home/insights/2020/12/more-regulators-pick-up-the-esg-baton.html)  
+- Qualitative Interviews with over 50 Sustainable Finance experts in France and Luxemburg
+
+
+
+
+## Secondary analysis to identify what affects ESG score in Refinitiv Data.
+
+```python
+grades_dict = {
+    'A+':  'A', 
+    'A':  'A', 
+    'A-':  'A',
+    'B+': 'B', 
+    'B-': 'B', 
+    'B':  'B', 
+    'C+': 'C', 
+    'C':  'C', 
+    'C-':  'C', 
+    'D+':  'D', 
+    'D':  'D', 
+    'D-':  'D',
+}
+```
+
+```python
+prep_df["ESG categories"] = prep_df["ESG Score Grade"].map(grades_dict)
+prep_df["Environmental categories"] = prep_df["Environmental Pillar Score Grade"].map(grades_dict)
+prep_df["Social categories"] = prep_df["Social Pillar Score Grade"].map(grades_dict)
+prep_df["Governance categories"] = prep_df["Governance Pillar Score Grade"].map(grades_dict)
+```
+
+```python
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'ESG categories')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by ESG  Category.")
+plt.show()
+```
+
+```python
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Environmental categories')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Environmental Category.")
+plt.show()
+```
+
+```python
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Social categories')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Social Category.")
+plt.show()
+```
+
+```python
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'ESG categories')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Governance Category.")
 plt.show()
 ```
