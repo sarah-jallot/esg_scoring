@@ -10,6 +10,7 @@ from sklearn.preprocessing import OneHotEncoder
 ```python
 # Utils
 
+## Data visualisation
 def boxplot(df, columns, categorical=True):
     """
     Draw categorical boxplot for the series of your choice, excluding missing values. 
@@ -30,7 +31,22 @@ def boxplot(df, columns, categorical=True):
             y=columns[1], 
             data=data
         )
+        
+def countplot(df, category):
+    """ 
+    Countplot for the category of your choice. 
+    """
+    fig, ax = plt.subplots(figsize=(10,6))
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    sns.countplot(
+        x=category, 
+        data=df,
+        order = df[category].value_counts().index)
+    plt.title(f"Countplot by {category}")
+    plt.show()
+    
 
+## Data preprocessing
 def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
     """
     Fill missing values for our dataframe. 
@@ -81,23 +97,25 @@ Then, download your data.
 
 ```python
 input_path = "../inputs/"
-input_filename = "universe_df_full.csv"
+input_filename = "universe_df_full_scores.csv"
 output_path = "../outputs/"
 ```
 
 ```python
-df = pd.read_csv(input_path+input_filename)
+initial_df = pd.read_csv(input_path+input_filename)
 ```
 
 ```python
-df = df.drop_duplicates(subset=['Instrument']).reset_index().drop(columns=["index"])
-df = df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0", "index"])
-df = df.drop(columns=["CARBON_FOOTPRINT"])
+initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
+initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index"])
+initial_df = initial_df.drop(columns=["CARBON_FOOTPRINT"])
 ```
 
 ```python
-df.head()
+initial_df.head()
 ```
+
+Here you will find the list of all SFDR metrics we subselected to make our choice:
 
 ```python
 sfdr_metrics = {
@@ -134,10 +152,22 @@ sfdr_metrics = {
 }
 ```
 
-### Data exploration
+### Data exploration without using any ESG scoring.
+
+```python
+df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
+```
 
 ```python
 df.columns
+```
+
+```python
+countplot(df,"Country")
+```
+
+```python
+countplot(df,"GICS Sector Name")
 ```
 
 Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
@@ -148,7 +178,12 @@ boxplot(df, columns, categorical=True)
 ```
 
 ```python
-columns = ["GICS Sector Name","CO2 Equivalent Emissions Direct, Scope 1"]
+columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
+boxplot(df, columns, categorical=False)
+```
+
+```python
+columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
 boxplot(df, columns, categorical=True)
 ```
 
@@ -159,6 +194,11 @@ boxplot(df, columns, categorical=True)
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Indirect, Scope 3"]
+boxplot(df, columns, categorical=True)
+```
+
+```python
+columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, categorical=True)
 ```
 
@@ -245,27 +285,36 @@ df_encoded.to_csv("../inputs/universe_df_encoded.csv")
 
 ### Basic clustering
 
-
-#### a) PCA and K-means
-
-
-We start with Kmeans as our basic clustering method, after performing a 2-dimensional PCA on the data.
-
 ```python
 import numpy as np
-from kneed import KneeLocator
-from sklearn.datasets import make_blobs
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+
+from numpy import unique
+from numpy import where
+from matplotlib import pyplot
 from sklearn.preprocessing import StandardScaler
 
 #Importing required modules
 from sklearn.decomposition import PCA
+# Import clustering methods
+from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import Birch
+from sklearn.cluster import SpectralClustering
+from sklearn.cluster import DBSCAN
+from sklearn.mixture import GaussianMixture
+from sklearn.cluster import MeanShift
 ```
 
 ```python
 prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
 ```
+
+#### a) Initial PCA
+
+
+First, we drop non-numerical columns.
 
 ```python
 drop_cols = [
@@ -285,6 +334,8 @@ drop_cols = [
 cluster_df = prep_df.drop(columns=drop_cols).copy()
 ```
 
+We then scale our data and perform a 2-dimensional PCA to be able to visualise it later.
+
 ```python
 features = np.array(cluster_df)
 
@@ -297,10 +348,57 @@ pca = PCA(2)
 pca_features = pca.fit_transform(scaled_features)
 ```
 
+We add the PCA columns to the full dataframe, as well as the Refinitiv scores (post PCA.)
+
 ```python
 # Add columns to full df
 prep_df["PCA_1"] = pd.Series(pca_features[:,0])
 prep_df["PCA_2"] = pd.Series(pca_features[:,1])
+
+# Letters
+prep_df["ESG Score Grade"] = initial_df.loc[:,"ESG Score Grade"]
+prep_df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
+prep_df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
+prep_df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
+
+# Scores
+prep_df['ESG Score'] = initial_df.loc[:,"ESG Score"]
+prep_df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
+prep_df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
+prep_df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
+```
+
+Next, we check for outliers which could throw off our KMeans algorithm.
+
+```python
+sns.boxplot(prep_df["PCA_1"])
+plt.title("PCA 1 boxplot")
+plt.show()
+```
+
+```python
+sns.boxplot(prep_df["PCA_2"])
+plt.title("PCA 2 boxplot")
+plt.show()
+```
+
+We identify outliers for PCA_1 components over 50 and PCA_2 components under -10.
+
+```python
+mask = prep_df["PCA_1"] > 50
+drop_rows = list(prep_df[mask].index)
+prep_df[mask]
+```
+
+We remove them from the dataframe.
+
+```python
+prep_df = prep_df.drop(index=drop_rows).copy()
+```
+
+```python
+pca_features = np.array(prep_df.loc[:,["PCA_1","PCA_2"]])
+pca_features
 ```
 
 ```python
@@ -316,7 +414,41 @@ plt.title("PCA plot coloured by industry.")
 plt.show()
 ```
 
+```python
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'ESG Score Grade')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by ESG Score Grade.")
+plt.show()
+```
+
+```python
+# PCA plot coloured by overall E score
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Environmental Pillar Score Grade')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Environmental Pillar Score Grade.")
+plt.show()
+```
+
+```python
+# PCA plot coloured by overall S score
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Social Pillar Score Grade')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Social Pillar Score Grade.")
+plt.show()
+```
+
+```python
+# PCA plot coloured by overall G score
+sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Governance Pillar Score Grade')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+plt.title("PCA plot coloured by Governance Pillar Score Grade.")
+plt.show()
+```
+
 We identify some outliers along the x-axis. Let's performe the elbow method to determine the optimal number of clusters.
+
+
+#### K-means
 
 ```python
 kmeans_kwargs = {
@@ -341,13 +473,14 @@ plt.plot(range(lower+1, upper+1), sse)
 plt.xticks(range(lower+1, upper+1))
 plt.xlabel("Number of Clusters")
 plt.ylabel("SSE")
+plt.title("Elbow graph for KMeans")
 plt.show()
 ```
 
 Based on this elbow graph, we select 4 as the optimal number of clusters.
 
 ```python
-optimal_nb = 4
+optimal_nb = 6
 ```
 
 ```python
@@ -369,6 +502,199 @@ plt.title("PCA plot coloured by kmeans.")
 plt.show()
 ```
 
-```python
+- https://machinelearningmastery.com/clustering-algorithms-with-python/  
+- https://www.kdnuggets.com/2019/10/right-clustering-algorithm.html
 
+```python
+X = pca_features
+```
+
+#### Mini-batch Kmeans
+
+```python
+# define the model
+sse = []
+for k in range(lower, upper):
+    model = MiniBatchKMeans(n_clusters=k)
+    model.fit(X)
+    sse.append(model.inertia_)
+```
+
+```python
+plt.style.use("fivethirtyeight")
+plt.plot(range(lower+1, upper+1), sse)
+plt.xticks(range(lower+1, upper+1))
+plt.xlabel("Number of Clusters")
+plt.ylabel("SSE")
+plt.title("Elbow graph for Mini-batch KMeans")
+plt.show()
+```
+
+```python
+optimal_nb = 6
+```
+
+```python
+model = MiniBatchKMeans(n_clusters=optimal_nb)
+# fit the model
+model.fit(X)
+# assign a cluster to each example
+yhat = model.predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Mini-batch Kmeans")
+plt.show()
+```
+
+#### Affinity propagation
+
+```python
+# define the model
+model = AffinityPropagation(damping=0.9)
+# fit the model
+model.fit(X)
+# assign a cluster to each example
+yhat = model.predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Affinity Propagation.")
+plt.show()
+```
+
+#### Agglomerative clustering
+
+```python
+# define the model
+model = AgglomerativeClustering(n_clusters=4)
+# fit model and predict clusters
+yhat = model.fit_predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Affinity Propagation")
+plt.show()
+```
+
+#### BIRCH Clustering
+
+```python
+# define the model
+model = Birch(threshold=0.01, n_clusters=2)
+# fit the model
+model.fit(X)
+# assign a cluster to each example
+yhat = model.predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("BIRCH")
+plt.show()
+```
+
+#### DBSCAN clustering
+
+```python
+# define the model
+model = DBSCAN(eps=0.30, min_samples=9)
+# fit model and predict clusters
+yhat = model.fit_predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("DBSCAN")
+plt.show()
+```
+
+#### Mean shift clustering
+
+```python
+# define the model
+model = MeanShift()
+# fit model and predict clusters
+yhat = model.fit_predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Mean Shift")
+plt.show()
+```
+
+#### Spectral clustering
+
+```python
+# define the model
+model = SpectralClustering(n_clusters=2)
+# fit model and predict clusters
+yhat = model.fit_predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Spectral Clustering")
+plt.show()
+```
+
+#### Gaussian Mixture Clustering
+
+```python
+# define the model
+model = GaussianMixture(n_components=2)
+# fit the model
+model.fit(X)
+# assign a cluster to each example
+yhat = model.predict(X)
+# retrieve unique clusters
+clusters = unique(yhat)
+# create scatter plot for samples from each cluster
+for cluster in clusters:
+    # get row indexes for samples with this cluster
+    row_ix = where(yhat == cluster)
+    # create scatter of these samples
+    plt.scatter(X[row_ix, 0], X[row_ix, 1])
+# show the plot
+plt.title("Gaussian Mixture")
+plt.show()
 ```
