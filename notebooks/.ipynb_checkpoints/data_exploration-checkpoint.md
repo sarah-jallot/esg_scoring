@@ -233,7 +233,19 @@ boxplot(df, columns, categorical=True)
 ### Data preprocessing
 
 ```python
+# Add columns to full df
+# Letters
+#prep_df["ESG Score Grade"] = initial_df.loc[:,"ESG Score Grade"]
+#prep_df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
+#prep_df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
+#prep_df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
+```
+
+```python
 df["ESG Score"] = initial_df["ESG Score"]
+df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
+df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
+df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
 ```
 
 ```python
@@ -268,7 +280,10 @@ median_strategy_cols = [
     "Accidents Total",
     "Total Renewable Energy To Energy Use in million",
     "Hazardous Waste",
-    "ESG Score"
+    "ESG Score",
+    "Environmenal Pillar Score",
+    "Social Pillar Score",
+    "Governance Pillar Score"
 ]
 
 # Assuming there is no policy in place, value set to zero. 
@@ -347,6 +362,7 @@ from sklearn.preprocessing import StandardScaler
 #Importing required modules
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
+from sklearn.ensemble import RandomForestRegressor
 # Import clustering methods
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
@@ -404,6 +420,28 @@ def kernel_pca_selection(cluster_df, n_components=200, threshold=0.5, method="cu
         mask = pca.explained_variance_ratio_ > threshold
         return pca_features, pca, pca_features[:,np.where(mask == True)[0]]
     
+
+def random_forest_selection(X,y, threshold=0.3):
+    """
+    Feature selection by using a random forest regressor.
+    """
+    rf_reg = RandomForestRegressor(n_estimators=100)
+    rf_reg.fit(X,y)
+    
+    importances = pd.DataFrame(list(cluster_df.columns))
+    importances["feature_importances"] = rf_reg.feature_importances_
+    importances.columns = ["features", "importances"]
+    importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
+    
+    #importances[:n_features].loc[:,"features":"importances"].plot(kind="barh")
+    mask = importances["importances"] > threshold
+    n_features = len(importances[mask])
+    importances[mask].loc[:,"features":"importances"].plot(kind="barh")
+    plt.yticks(ticks=range(n_features),labels=importances[:n_features]["features"])
+    plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
+    plt.show()
+    
+    return importances
 ```
 
 ```python
@@ -481,46 +519,9 @@ plt.title("PCA feature selection")
 plt.show()
 ```
 
-We add the PCA columns to the full dataframe, as well as the Refinitiv scores (post PCA.)
-
 ```python
-# Add columns to full df
 prep_df["PCA_1"] = pd.Series(pca_features[:,0])
 prep_df["PCA_2"] = pd.Series(pca_features[:,1])
-
-# Letters
-prep_df["ESG Score Grade"] = initial_df.loc[:,"ESG Score Grade"]
-prep_df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
-prep_df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
-prep_df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
-
-# Scores
-prep_df['ESG Score'] = initial_df.loc[:,"ESG Score"]
-prep_df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
-prep_df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
-prep_df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
-```
-
-Next, we check for outliers which could throw off our KMeans algorithm.
-
-```python
-sns.boxplot(prep_df["PCA_1"])
-plt.title("PCA 1 boxplot")
-plt.show()
-```
-
-```python
-sns.boxplot(prep_df["PCA_2"])
-plt.title("PCA 2 boxplot")
-plt.show()
-```
-
-We identify outliers for PCA_1 components over 50 and PCA_2 components under -10.
-
-```python
-mask = prep_df["PCA_1"] > 50
-drop_rows = list(prep_df[mask].index)
-prep_df[mask]
 ```
 
 ### Kernel PCA 
@@ -550,59 +551,28 @@ plt.show()
 ### Random forest
 
 
-We train a Random Forest to predict the ESG Score as a function of our SFDR metrics. 
+We train a Random Forest to predict the ESG Score as a function of our SFDR metrics, and use a threshold feature importance to select relevant features.  
 
 ```python
-from sklearn.ensemble import RandomForestRegressor
-```
-
-```python
-def random_forest_selection(X,y):
-    rf_reg = RandomForestRegressor(n_estimators=100)
-    rf_reg.fit(X,y)
-    
-    importances = pd.DataFrame(list(cluster_df.columns))
-    importances["feature_importances"] = rf_reg.feature_importances_
-    importances.columns = ["features", "importances"]
-    importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
-    
-    n_features = 20
-    importances[:n_features].loc[:,"features":"importances"].plot(kind="barh")
-    plt.yticks(ticks=range(n_features),labels=importances[:n_features]["features"])
-    plt.show()
-    
-    return importances
-```
-
-```python
-random_forest_selection(X,y)
+threshold = 0.005
 ```
 
 ```python
 X, y = cluster_df.copy(), prep_df["ESG Score"].copy()
-rf_reg = RandomForestRegressor()
-rf_reg.fit(X,y)
+importances = random_forest_selection(X,y, threshold=threshold)
 ```
 
 ```python
-importances = pd.DataFrame(list(cluster_df.columns))
-importances["feature_importances"] = rf_reg.feature_importances_
-importances.columns = ["features", "importances"]
-importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
+mask = importances.importances > threshold
+X = cluster_df.loc[:,importances[mask].features]
+X.head()
 ```
-
-```python
-n_features = 10
-importances[:n_features].loc[:,"features":"importances"].plot(kind="barh")
-plt.yticks(ticks=range(n_features),labels=importances[:n_features]["features"])
-plt.show()
-```
-
-- feature importance supérieure à un seuil  
-
 
 ### Autoencoder
 
+```python
+# to do 
+```
 
 We remove them from the dataframe.
 
