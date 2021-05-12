@@ -427,6 +427,7 @@ def random_forest_selection(X,y, threshold=0.3):
     """
     rf_reg = RandomForestRegressor(n_estimators=100)
     rf_reg.fit(X,y)
+    print(rf_reg.score(X, y))
     
     importances = pd.DataFrame(list(cluster_df.columns))
     importances["feature_importances"] = rf_reg.feature_importances_
@@ -547,9 +548,6 @@ plt.scatter(x=kernel_pca_features[:,0], y=kernel_pca_features[:,1])
 plt.title("Kernel PCA feature scatterplot")
 plt.show()
 ```
-
-### Random forest
-
 
 We train a Random Forest to predict the ESG Score as a function of our SFDR metrics, and use a threshold feature importance to select relevant features.  
 
