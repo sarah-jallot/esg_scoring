@@ -281,7 +281,7 @@ median_strategy_cols = [
     "Total Renewable Energy To Energy Use in million",
     "Hazardous Waste",
     "ESG Score",
-    "Environmenal Pillar Score",
+    "Environmental Pillar Score",
     "Social Pillar Score",
     "Governance Pillar Score"
 ]
@@ -363,6 +363,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
 # Import clustering methods
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
@@ -400,41 +402,46 @@ def pca_selection(cluster_df, n_components=200, threshold=0.5, method="cumsum"):
         return pca_features, pca, pca_features[:,np.where(mask == True)[0]]
     
 
-def kernel_pca_selection(cluster_df, n_components=200, threshold=0.5, method="cumsum"):
+def kpca_selection(cluster_df, n_components=200, kernel="rbf", threshold=0.5, method="cumsum"):
     """
-    PCA algorithm for feature selection. 
+    Kernel PCA algorithm for feature selection. 
     """
     features = np.array(cluster_df)
     scaler = StandardScaler()
     scaled_features = scaler.fit_transform(features)
     
-    kernel_pca = KernelPCA(n_components)
-    kernel_pca_features = kernel_pca.fit_transform(scaled_features)
+    kpca = KernelPCA(n_components, kernel=kernel)
+    kpca_features = kpca.fit_transform(scaled_features)
+    
+    explained_variance = np.var(kpca_features, axis=0)
+    explained_variance_ratio = explained_variance / np.sum(explained_variance)
     
     if method == "cumsum":
-        cumsum = np.cumsum(pca.explained_variance_ratio_)
+        cumsum = np.cumsum(explained_variance_ratio)
         last_feature = np.where(cumsum > threshold)[0][0]-1
-        return pca_features, pca, pca_features[:,:last_feature]
+        return kpca_features, kpca, kpca_features[:,:last_feature]
         
     if method == "feature-wise":
-        mask = pca.explained_variance_ratio_ > threshold
-        return pca_features, pca, pca_features[:,np.where(mask == True)[0]]
+        mask = explained_variance_ratio_ > threshold
+        return kpca_features, kpca, kpca_features[:,np.where(mask == True)[0]]
+
     
 
-def random_forest_selection(X,y, threshold=0.3):
+def random_forest_selection(X_train,X_test, y_train, y_test, threshold=0.3):
     """
     Feature selection by using a random forest regressor.
     """
     rf_reg = RandomForestRegressor(n_estimators=100)
-    rf_reg.fit(X,y)
-    print(rf_reg.score(X, y))
+    rf_reg.fit(X_train,y_train)
+    y_pred_full = rf_reg.predict(X_test)
+    r2_full = r2_score(y_test, y_pred_full)
     
     importances = pd.DataFrame(list(cluster_df.columns))
     importances["feature_importances"] = rf_reg.feature_importances_
     importances.columns = ["features", "importances"]
     importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
     
-    #importances[:n_features].loc[:,"features":"importances"].plot(kind="barh")
+
     mask = importances["importances"] > threshold
     n_features = len(importances[mask])
     importances[mask].loc[:,"features":"importances"].plot(kind="barh")
@@ -442,7 +449,13 @@ def random_forest_selection(X,y, threshold=0.3):
     plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
     plt.show()
     
-    return importances
+    X_important = X_train.loc[:,importances[mask].features]
+    rf_reg_important = RandomForestRegressor(n_estimators=100)
+    rf_reg_important.fit(X_important,y_train)
+    y_pred_imp = rf_reg_important.predict(X_test.loc[:,importances[mask].features])
+    r2_imp = r2_score(y_test, y_pred_imp)
+    
+    return importances, importances[mask], r2_full, r2_imp
 ```
 
 ```python
@@ -478,7 +491,10 @@ drop_cols = [
     "Critical Country 2",
     "Critical Country 3",
     "Critical Country 4",
-    "ESG Score"
+    "ESG Score",
+    "Environmental Pillar Score", 
+    "Social Pillar Score", 
+    "Governance Pillar Score" 
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
 ```
@@ -491,15 +507,21 @@ cluster_df.columns
 cluster_df.shape
 ```
 
+```python
+threshold = 0.8
+method = "cumsum"
+```
+
 We then scale our data to be able to perform a PCA on it using scikit learn.
 
 ```python
-pca_features, pca, X = pca_selection(cluster_df, threshold=0.8, method="cumsum")
+full_pca_features, pca, selected_features = pca_selection(cluster_df, threshold=threshold, method=method)
+print(f"We selected {selected_features.shape[1]} out of {cluster_df.shape[1]} features for the {method} method with a threshold of {threshold} .")
 ```
 
 ```python
-ticks = list(range(n_components))[::10]
-labels = [x+1 for x in ticks]
+ticks = list(range(pca.n_components))[::10]
+labels = [x for x in ticks]
 
 figure(figsize=(10,4))
 plt.plot(pca.explained_variance_,)
@@ -521,26 +543,50 @@ plt.show()
 ```
 
 ```python
-prep_df["PCA_1"] = pd.Series(pca_features[:,0])
-prep_df["PCA_2"] = pd.Series(pca_features[:,1])
+prep_df["PCA_1"] = pd.Series(full_pca_features[:,0])
+prep_df["PCA_2"] = pd.Series(full_pca_features[:,1])
+```
+
+```python
+X_pca = selected_features
 ```
 
 ### Kernel PCA 
 Applying a kernel to make the data linearly separable by PCA. 
 
 ```python
-X = np.array(cluster_df)
-n_components = 2
+threshold = 0.8
+n_components = 200
+kernel = "rbf"
+method = "cumsum"
 ```
 
 ```python
-kernel_pca = KernelPCA(n_components=n_components, kernel='rbf')
-kernel_pca_features = kernel_pca.fit_transform(X)
+full_kpca_features, kpca, selected_kpca_features = kpca_selection(cluster_df, n_components=n_components, kernel=kernel, threshold=threshold, method=method)
+print(f"We selected {selected_kpca_features.shape[1]} out of {cluster_df.shape[1]} features for the {method} method with a threshold of {threshold} .")
 ```
 
 ```python
-kernel_pca.lambdas_
-np.cov(kernel_pca_features.T)
+ticks = list(range(kpca.n_components))[::10]
+labels = [x for x in ticks]
+
+figure(figsize=(10,4))
+plt.plot(explained_variance,)
+plt.xlabel("Number of components")
+plt.ylabel("Explained variance")
+plt.xticks(ticks=ticks, labels=labels)
+plt.title("Kernel PCA feature selection")
+plt.show()
+```
+
+```python
+figure(figsize=(10,4))
+plt.plot(explained_variance_ratio)
+plt.xlabel("Number of components")
+plt.ylabel("Explained variance %")
+plt.xticks(ticks=ticks, labels=labels)
+plt.title("Kernel PCA feature selection")
+plt.show()
 ```
 
 ```python
@@ -549,21 +595,48 @@ plt.title("Kernel PCA feature scatterplot")
 plt.show()
 ```
 
+```python
+prep_df["KPCA_1"] = pd.Series(full_kpca_features[:,0])
+prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
+```
+
+```python
+X_kpca = selected_kpca_features
+```
+
+### Random Forest
+
+
 We train a Random Forest to predict the ESG Score as a function of our SFDR metrics, and use a threshold feature importance to select relevant features.  
 
 ```python
 threshold = 0.005
+X, y = cluster_df.copy(), prep_df["ESG Score"].copy()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
 ```
 
 ```python
-X, y = cluster_df.copy(), prep_df["ESG Score"].copy()
-importances = random_forest_selection(X,y, threshold=threshold)
+importances, masked_importances, r2_full, r2_imp = random_forest_selection(
+    X_train, 
+    X_test, 
+    y_train, 
+    y_test, 
+    threshold=threshold
+)
+```
+
+```python
+r2_full
+```
+
+```python
+r2_imp
 ```
 
 ```python
 mask = importances.importances > threshold
-X = cluster_df.loc[:,importances[mask].features]
-X.head()
+X_rf = cluster_df.loc[:,importances[mask].features]
+X_rf.head()
 ```
 
 ### Autoencoder
@@ -951,8 +1024,7 @@ plt.show()
 - Qualitative Interviews with over 50 Sustainable Finance experts in France and Luxemburg  
 
 - [Clustering by Passing Messages Between the datapoints](https://science.sciencemag.org/content/315/5814/972)
-
-
+- Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.
 
 
 ## Secondary analysis to identify what affects ESG score in Refinitiv Data.
