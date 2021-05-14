@@ -55,6 +55,35 @@ def countplot(df, category, figsize=(10,6)):
     plt.title(f"Countplot by {category}")
     plt.show()
     
+def scatterplot(df, x_axis, y_axis, hue, title):
+    sns.scatterplot(
+        data = df, 
+        x = df.loc[:,x_axis] , 
+        y = df.loc[:,y_axis] ,
+        palette="Set1",
+        hue = hue,)
+    plt.title(title)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+    
+def corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics"):
+    corr = df.corr()
+    mask = np.triu(np.ones_like(corr, dtype=bool))
+    
+    f, ax = plt.subplots(figsize=(11, 9))
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+    
+    sns.heatmap(corr, 
+                mask=mask, 
+                cmap=cmap,
+                vmax=vmax,
+                center=0,
+                square=True, 
+                linewidths=.5, 
+                cbar_kws={"shrink": .5})
+    plt.title(title)
+    plt.show()   
+    
 
 ## Data preprocessing
 def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
@@ -228,6 +257,10 @@ boxplot(df, columns, categorical=True)
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, categorical=True)
+```
+
+```python
+corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics")
 ```
 
 ### Data preprocessing
@@ -500,14 +533,6 @@ cluster_df = prep_df.drop(columns=drop_cols).copy()
 ```
 
 ```python
-cluster_df.columns
-```
-
-```python
-cluster_df.shape
-```
-
-```python
 threshold = 0.8
 method = "cumsum"
 ```
@@ -516,7 +541,7 @@ We then scale our data to be able to perform a PCA on it using scikit learn.
 
 ```python
 full_pca_features, pca, selected_features = pca_selection(cluster_df, threshold=threshold, method=method)
-print(f"We selected {selected_features.shape[1]} out of {cluster_df.shape[1]} features for the {method} method with a threshold of {threshold} .")
+print(f"We selected {selected_features.shape[1]} out of {full_pca_features.shape[1]} features for the {method} method with a threshold of {threshold} .")
 ```
 
 ```python
@@ -545,6 +570,11 @@ plt.show()
 ```python
 prep_df["PCA_1"] = pd.Series(full_pca_features[:,0])
 prep_df["PCA_2"] = pd.Series(full_pca_features[:,1])
+scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot", hue=None)
+```
+
+```python
+scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="GICS Sector Name")
 ```
 
 ```python
@@ -563,12 +593,14 @@ method = "cumsum"
 
 ```python
 full_kpca_features, kpca, selected_kpca_features = kpca_selection(cluster_df, n_components=n_components, kernel=kernel, threshold=threshold, method=method)
-print(f"We selected {selected_kpca_features.shape[1]} out of {cluster_df.shape[1]} features for the {method} method with a threshold of {threshold} .")
+print(f"We selected {selected_kpca_features.shape[1]} out of {full_kpca_features.shape[1]} features for the {method} method with a threshold of {threshold} .")
 ```
 
 ```python
 ticks = list(range(kpca.n_components))[::10]
 labels = [x for x in ticks]
+explained_variance = np.var(full_kpca_features, axis=0)
+explained_variance_ratio = explained_variance / np.sum(explained_variance)
 
 figure(figsize=(10,4))
 plt.plot(explained_variance,)
@@ -590,7 +622,7 @@ plt.show()
 ```
 
 ```python
-plt.scatter(x=kernel_pca_features[:,0], y=kernel_pca_features[:,1])
+plt.scatter(x=full_kpca_features[:,0], y=full_kpca_features[:,1])
 plt.title("Kernel PCA feature scatterplot")
 plt.show()
 ```
@@ -626,11 +658,7 @@ importances, masked_importances, r2_full, r2_imp = random_forest_selection(
 ```
 
 ```python
-r2_full
-```
-
-```python
-r2_imp
+print(f"Full R2 score: {r2_full} versus score after feature selection: {r2_imp}.")
 ```
 
 ```python
@@ -639,65 +667,38 @@ X_rf = cluster_df.loc[:,importances[mask].features]
 X_rf.head()
 ```
 
+```python
+corrplot(X_rf, vmax=1, title="Correlation matrix for Random Forest selected features")
+```
+
+```python
+scatterplot(
+    X_rf, 
+    x_axis="Board Gender Diversity, Percent", 
+    y_axis="Market Capitalization (bil) [USD]", 
+    title="Random Forest Feature Selection",
+    hue=None
+)
+```
+
+```python
+scatterplot(
+    X_rf, 
+    x_axis="Board Gender Diversity, Percent", 
+    y_axis="Market Capitalization (bil) [USD]", 
+    hue="Fundamental Human Rights ILO UN", 
+    title="Scatterplot"
+)
+```
+
 ### Autoencoder
 
 ```python
 # to do 
 ```
 
-We remove them from the dataframe.
-
 ```python
-prep_df = prep_df.drop(index=drop_rows).copy()
-```
 
-```python
-pca_features = np.array(prep_df.loc[:,["PCA_1","PCA_2"]])
-pca_features
-```
-
-```python
-plt.scatter(prep_df.loc[:,"PCA_1"], prep_df.loc[:,"PCA_2"])
-plt.title("Data plot after 2-dimensional PCA.")
-plt.show()
-```
-
-```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'GICS Sector Name')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by industry.")
-plt.show()
-```
-
-```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'ESG Score Grade')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by ESG Score Grade.")
-plt.show()
-```
-
-```python
-# PCA plot coloured by overall E score
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Environmental Pillar Score Grade')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Environmental Pillar Score Grade.")
-plt.show()
-```
-
-```python
-# PCA plot coloured by overall S score
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Social Pillar Score Grade')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Social Pillar Score Grade.")
-plt.show()
-```
-
-```python
-# PCA plot coloured by overall G score
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Governance Pillar Score Grade')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Governance Pillar Score Grade.")
-plt.show()
 ```
 
 ### Clustering
@@ -705,14 +706,16 @@ plt.show()
 
 As such, cluster analysis is an iterative process where subjective evaluation of the identified clusters is fed back into changes to algorithm configuration until a desired or appropriate result is achieved.
 
-
-We identify some outliers along the x-axis. Let's performe the elbow method to determine the optimal number of clusters.
-
+```python
+#X = X_pca
+X = X_kpca
+#X = np.array(X_rf)
+```
 
 #### K-means
 
 
-Assign examples to each cluster while trying to minimize the variance within each cluster.
+Assign examples to each cluster while trying to minimize the variance within each cluster. Let's perform the elbow method to determine the optimal number of clusters.
 
 ```python
 kmeans_kwargs = {
@@ -727,7 +730,7 @@ lower, upper = 1, 10
 sse = []
 for k in range(lower, upper):
     kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-    kmeans.fit(pca_features)
+    kmeans.fit(X)
     sse.append(kmeans.inertia_)
 ```
 
@@ -744,12 +747,12 @@ plt.show()
 Based on this elbow graph, we select 4 as the optimal number of clusters.
 
 ```python
-optimal_nb = 6
+optimal_nb = 5
 ```
 
 ```python
 optimal_kmeans = KMeans(n_clusters=optimal_nb, **kmeans_kwargs)
-optimal_kmeans.fit(pca_features)
+optimal_kmeans.fit(X)
 ```
 
 ```python
@@ -760,14 +763,13 @@ prep_df.head()
 Now, let's plot our datapoints for each kmeans label.
 
 ```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'kmean_labels')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by kmeans.")
-plt.show()
-```
-
-```python
-X = pca_features
+scatterplot(
+    df=prep_df, 
+    x_axis="KPCA_1", 
+    y_axis="KPCA_2", 
+    hue="kmean_labels", 
+    title="KPCA coloured by Kmeans"
+)
 ```
 
 #### Mini-batch Kmeans
@@ -796,22 +798,25 @@ optimal_nb = 6
 ```
 
 ```python
-model = MiniBatchKMeans(n_clusters=optimal_nb)
+mkmeans_model = MiniBatchKMeans(n_clusters=optimal_nb)
 # fit the model
-model.fit(X)
+mkmeans_model.fit(X)
 # assign a cluster to each example
-yhat = model.predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Mini-batch Kmeans")
-plt.show()
+yhat = mkmeans_model.predict(X)
+```
+
+```python
+prep_df["mkmean_labels"] = mkmeans_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "mkmean_labels", 
+    "KPCA coloured by Mini-kmeans"
+)
 ```
 
 #### Affinity propagation
@@ -821,22 +826,25 @@ Affinity propagation finds "exemplars," members of the input set that are repres
 
 ```python
 # define the model
-model = AffinityPropagation(damping=0.5)
+aff_model = AffinityPropagation(damping=0.5)
 # fit the model
-model.fit(X)
+aff_model.fit(X)
 # assign a cluster to each example
-yhat = model.predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Affinity Propagation")
-plt.show()
+yhat = aff_model.predict(X)
+```
+
+```python
+prep_df["aff_labels"] = aff_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "aff_labels", 
+    "KPCA coloured by Mini-kmeans"
+)
 ```
 
 #### Agglomerative clustering
@@ -846,20 +854,23 @@ Belongs to hierarchical clustering methods.
 
 ```python
 # define the model
-model = AgglomerativeClustering(n_clusters=optimal_nb)
+agg_model = AgglomerativeClustering(n_clusters=optimal_nb)
 # fit model and predict clusters
-yhat = model.fit_predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Affinity Propagation")
-plt.show()
+yhat = agg_model.fit_predict(X)
+```
+
+```python
+prep_df["agg_labels"] = agg_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "agg_labels", 
+    "KPCA coloured by Mini-kmeans"
+)
 ```
 
 #### BIRCH Clustering
@@ -874,22 +885,25 @@ n_clusters = optimal_nb
 
 ```python
 # define the model
-model = Birch(threshold=threshold, n_clusters=n_clusters)
+birch_model = Birch(threshold=threshold, n_clusters=n_clusters)
 # fit the model
-model.fit(X)
+birch_model.fit(X)
 # assign a cluster to each example
-yhat = model.predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("BIRCH")
-plt.show()
+yhat = birch_model.predict(X)
+```
+
+```python
+prep_df["birch_labels"] = birch_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "birch_labels", 
+    "KPCA coloured by Mini-kmeans"
+)
 ```
 
 #### DBSCAN clustering
@@ -904,20 +918,23 @@ min_samples = 9
 
 ```python
 # define the model
-model = DBSCAN(eps=eps, min_samples=min_samples)
+db_model = DBSCAN(eps=eps, min_samples=min_samples)
 # fit model and predict clusters
-yhat = model.fit_predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("DBSCAN")
-plt.show()
+yhat = db_model.fit_predict(X)
+```
+
+```python
+prep_df["dbscan_labels"] = db_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "dbscan_labels", 
+    "KPCA coloured by Mini-kmeans"
+)
 ```
 
 #### Mean Shift clustering
@@ -927,20 +944,23 @@ Mean shift clustering involves finding and adapting centroids based on the densi
 
 ```python
 # define the model
-model = MeanShift()
+mshift_model = MeanShift()
 # fit model and predict clusters
-yhat = model.fit_predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Mean Shift")
-plt.show()
+yhat = mshift_model.fit_predict(X)
+```
+
+```python
+prep_df["mshift_labels"] = mshift_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "mshift_labels", 
+    "KPCA coloured by Mean-shift"
+)
 ```
 
 ### OPTICS
@@ -949,20 +969,23 @@ plt.show()
 Modified version of DBSCAN. 
 
 ```python
-model = OPTICS(eps=0.8, min_samples=10)
+optics_model = OPTICS(eps=0.8, min_samples=10)
 # fit model and predict clusters
-yhat = model.fit_predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-	# get row indexes for samples with this cluster
-	row_ix = where(yhat == cluster)
-	# create scatter of these samples
-	plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("OPTICS")
-plt.show()
+yhat = optics_model.fit_predict(X)
+```
+
+```python
+prep_df["optics_labels"] = optics_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "optics_labels", 
+    "KPCA coloured by Optics"
+)
 ```
 
 #### Spectral clustering
@@ -972,20 +995,23 @@ Here, one uses the top eigenvectors of a matrix derived from the distance betwee
 
 ```python
 # define the model
-model = SpectralClustering(n_clusters=optimal_nb)
+spec_model = SpectralClustering(n_clusters=optimal_nb)
 # fit model and predict clusters
-yhat = model.fit_predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Spectral Clustering")
-plt.show()
+yhat = spec_model.fit_predict(X)
+```
+
+```python
+prep_df["spectral_labels"] = spec_model.labels_
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "spectral_labels", 
+    "KPCA coloured by Spectral labels"
+)
 ```
 
 #### Gaussian Mixture Clustering
@@ -995,22 +1021,23 @@ A Gaussian mixture model summarizes a multivariate probability density function 
 
 ```python
 # define the model
-model = GaussianMixture(n_components=optimal_nb)
+gmm_model = GaussianMixture(n_components=optimal_nb)
 # fit the model
-model.fit(X)
-# assign a cluster to each example
-yhat = model.predict(X)
-# retrieve unique clusters
-clusters = unique(yhat)
-# create scatter plot for samples from each cluster
-for cluster in clusters:
-    # get row indexes for samples with this cluster
-    row_ix = where(yhat == cluster)
-    # create scatter of these samples
-    plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.title("Gaussian Mixture")
-plt.show()
+gmm_model.fit(X)
+```
+
+```python
+prep_df["gaussian_labels"] = gmm_model.predict(X)
+```
+
+```python
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "gaussian_labels", 
+    "KPCA coloured by Gaussian Labels"
+)
 ```
 
 ### Bibliography:
@@ -1030,6 +1057,13 @@ plt.show()
 ## Secondary analysis to identify what affects ESG score in Refinitiv Data.
 
 ```python
+#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="ESG Score Grade")
+#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Environmental Pillar Score Grade")
+#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Social Pillar Score Grade")
+#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Governance Pillar Score Grade")
+```
+
+```python
 grades_dict = {
     'A+':  'A', 
     'A':  'A', 
@@ -1044,9 +1078,7 @@ grades_dict = {
     'D':  'D', 
     'D-':  'D',
 }
-```
 
-```python
 prep_df["ESG categories"] = prep_df["ESG Score Grade"].map(grades_dict)
 prep_df["Environmental categories"] = prep_df["Environmental Pillar Score Grade"].map(grades_dict)
 prep_df["Social categories"] = prep_df["Social Pillar Score Grade"].map(grades_dict)
@@ -1054,50 +1086,58 @@ prep_df["Governance categories"] = prep_df["Governance Pillar Score Grade"].map(
 ```
 
 ```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'ESG categories')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by ESG  Category.")
-plt.show()
+scatterplot(
+    prep_df, 
+    x_axis="PCA_1", 
+    y_axis="PCA_2", 
+    title="PCA scatterplot by ESG Category", 
+    hue="ESG Categories"
+)
 ```
 
 ```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Environmental categories')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Environmental Category.")
-plt.show()
+scatterplot(
+    prep_df, 
+    x_axis="PCA_1", 
+    y_axis="PCA_2", 
+    title="PCA scatterplot by Environmental Category", 
+    hue="Environmental Categories"
+)
 ```
 
 ```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Social categories')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Social Category.")
-plt.show()
+scatterplot(
+    prep_df, 
+    x_axis="PCA_1", 
+    y_axis="PCA_2", 
+    title="PCA scatterplot by Social Category", 
+    hue="Social Categories"
+)
 ```
 
 ```python
-sns.scatterplot(data = prep_df, x = prep_df.loc[:,"PCA_1"] , y = prep_df.loc[:,"PCA_2"] , hue = 'Governance categories')
-plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-plt.title("PCA plot coloured by Governance Category.")
-plt.show()
+scatterplot(
+    prep_df, 
+    x_axis="PCA_1", 
+    y_axis="PCA_2", 
+    title="PCA scatterplot by Governance Category", 
+    hue="Governance Categories"
+)
 ```
 
 ```python
-fig,axes =plt.subplots(10,3, figsize=(12, 9)) # 3 columns each containing 10 figures, total 30 features
-excellent= prep_df.loc[prep_df["ESG categories"]=="A"] # define malignant
-bad=prep_df.loc[prep_df["ESG categories"]=="D"] # define benign
-ax=axes.ravel()# flat axes with numpy ravel
-for i in range(30):
-  _,bins=np.histogram(prep_df.iloc[:,i],bins=40)
-  ax[i].hist(excellent.iloc[:,i],bins=bins,color='r',alpha=.5)# red color for malignant class
-  ax[i].hist(bad.iloc[:,i],bins=bins,color='g',alpha=0.3)# alpha is           for transparency in the overlapped region 
-  ax[i].set_title(prep_df.columns[i],fontsize=9)
-  ax[i].axes.get_xaxis().set_visible(False) # the x-axis co-ordinates are not so useful, as we just want to look how well separated the histograms are
-  ax[i].set_yticks(())
-ax[0].legend(['excellent','bad'],loc='best',fontsize=8)
-plt.tight_layout()# let's make good plots
-plt.show()
-```
-
-```python
-
+#fig,axes =plt.subplots(10,3, figsize=(12, 9)) # 3 columns each containing 10 figures, total 30 features
+#excellent= prep_df.loc[prep_df["ESG categories"]=="A"] # define malignant
+#bad=prep_df.loc[prep_df["ESG categories"]=="D"] # define benign
+#ax=axes.ravel()# flat axes with numpy ravel
+#for i in range(30):
+#  _,bins=np.histogram(prep_df.iloc[:,i],bins=40)
+#  ax[i].hist(excellent.iloc[:,i],bins=bins,color='r',alpha=.5)# red color for malignant class
+#  ax[i].hist(bad.iloc[:,i],bins=bins,color='g',alpha=0.3)# alpha is           for transparency in the overlapped region 
+#  ax[i].set_title(prep_df.columns[i],fontsize=9)
+#  ax[i].axes.get_xaxis().set_visible(False) # the x-axis co-ordinates are not so useful, as we just want to look how well separated the histograms are
+#  ax[i].set_yticks(())
+#ax[0].legend(['excellent','bad'],loc='best',fontsize=8)
+#plt.tight_layout()# let's make good plots
+#plt.show()
 ```
