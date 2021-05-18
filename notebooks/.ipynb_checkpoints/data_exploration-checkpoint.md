@@ -11,6 +11,7 @@ First, run all necessary imports.
 
 ```python
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pprint
@@ -530,6 +531,10 @@ drop_cols = [
     "Governance Pillar Score" 
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
+```
+
+```python
+cluster_df.to_csv("../inputs/universe_clusters.csv")
 ```
 
 ```python
@@ -1054,7 +1059,27 @@ scatterplot(
 - Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.
 
 
-## Secondary analysis to identify what affects ESG score in Refinitiv Data.
+Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
+
+
+## Refinitiv score prediction
+
+```python
+filename = "/universe_df_encoded.csv"
+```
+
+```python
+X = pd.read_csv(input_path+filename)
+```
+
+```python
+X.loc[:,"ESG Score": "Governance Pillar Score"]
+```
+
+```python
+for col in X.columns:
+    print(col)
+```
 
 ```python
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="ESG Score Grade")

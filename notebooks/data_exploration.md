@@ -11,6 +11,7 @@ First, run all necessary imports.
 
 ```python
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pprint
@@ -530,6 +531,10 @@ drop_cols = [
     "Governance Pillar Score" 
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
+```
+
+```python
+cluster_df.to_csv("../inputs/universe_clusters.csv")
 ```
 
 ```python
@@ -1054,7 +1059,68 @@ scatterplot(
 - Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.
 
 
-## Secondary analysis to identify what affects ESG score in Refinitiv Data.
+Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
+
+
+## Refinitiv score prediction
+
+
+L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est possible de retrouver les scores ESG de Refinitiv.
+
+
+**L'esprit de la notation ESG Refinitiv:**
+- Performance relative de l'entreprise par rapport à son secteur d'activité sur le E et le S. 
+- Performance relative au pays d'implantation sur le G. 
+
+**La méthodologie de notation ESG Refinitiv:**  
+- Sous-sélection de 186/500 indicateurs comparables
+- Mapping sur chaque indicateur du degré de matérialité d'une problématique sur une échelle de 1 à 10 
+- Transparence très importante sur les métriques définies comme hautement matérielles  
+- Analyse de controverse, avec correction du biais contre les grosses market cap
+
+
+**Par pilier, leur méthodologie varie.**
+- Sur le pilier environnemental, ils prennent d'habitude une médiane par industrie.  
+- Sur le pilier social, ils appliquent la matrice de transparence et pour le %d'employées et le % de représentation, la médiane par industrie.
+- Sur le pilier de la gouvernance, ils regardent l'ensemble des indicateurs.  
+
+```python
+filename = "/universe_df_encoded.csv"
+```
+
+```python
+df = pd.read_csv(input_path+filename)
+```
+
+```python
+drop_cols = [
+    "ESG Score", 
+    "Environmental Pillar Score", 
+    "Social Pillar Score", 
+    "Governance Pillar Score", 
+    "Unnamed: 0", 
+    "Name", 
+    "Symbol", 
+    "Country", # encoded
+    "SEDOL",
+    "ISINS",
+    "GICS Sector Name", # encoded
+]
+```
+
+```python
+y = df.loc[:,"ESG Score": "Governance Pillar Score"].copy()
+X = df.drop(columns=drop_cols).copy()
+```
+
+```python
+X
+```
+
+```python
+for col in X.columns:
+    print(col)
+```
 
 ```python
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="ESG Score Grade")
