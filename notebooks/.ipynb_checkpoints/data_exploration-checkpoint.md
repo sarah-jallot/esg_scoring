@@ -280,6 +280,11 @@ df["ESG Score"] = initial_df["ESG Score"]
 df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
 df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
 df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
+
+df["ESG Score Grade"] = initial_df["ESG Score Grade"]
+df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
+df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
+df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
 ```
 
 ```python
@@ -470,7 +475,7 @@ def random_forest_selection(X_train,X_test, y_train, y_test, threshold=0.3):
     y_pred_full = rf_reg.predict(X_test)
     r2_full = r2_score(y_test, y_pred_full)
     
-    importances = pd.DataFrame(list(cluster_df.columns))
+    importances = pd.DataFrame(list(X_train.columns))
     importances["feature_importances"] = rf_reg.feature_importances_
     importances.columns = ["features", "importances"]
     importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
@@ -490,6 +495,27 @@ def random_forest_selection(X_train,X_test, y_train, y_test, threshold=0.3):
     r2_imp = r2_score(y_test, y_pred_imp)
     
     return importances, importances[mask], r2_full, r2_imp
+
+
+# Understand clustering results. 
+
+def cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels"):
+    """
+    Visualise boxplot for this feature by cluster.
+    """
+    X_rf.boxplot(feature_name, by=[clusters],figsize=(10,7))
+    plt.title(f"Boxplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+    
+def cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels"):
+    """
+    Visualise categorical count for this feature by cluster.
+    """
+    sns.countplot(x=clusters, hue=feature_name, data=X_rf)
+    plt.title(f"Catplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
 ```
 
 ```python
@@ -498,6 +524,11 @@ prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
 
 ```python
 prep_df.head()
+```
+
+```python
+for col in prep_df.columns:
+    print(col)
 ```
 
 ### Dimensionality reduction techniques
@@ -528,7 +559,11 @@ drop_cols = [
     "ESG Score",
     "Environmental Pillar Score", 
     "Social Pillar Score", 
-    "Governance Pillar Score" 
+    "Governance Pillar Score",
+    "ESG Score Grade",
+    "Environmental Pillar Score Grade", 
+    "Social Pillar Score Grade", 
+    "Governance Pillar Score Grade" 
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
 ```
@@ -775,6 +810,42 @@ scatterplot(
     hue="kmean_labels", 
     title="KPCA coloured by Kmeans"
 )
+```
+
+```python
+X_rf["kmean_labels"] = optimal_kmeans.labels_
+```
+
+```python
+X_rf
+```
+
+```python
+def cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels"):
+    """
+    Visualise boxplot for this feature by cluster.
+    """
+    X_rf.boxplot(feature_name, by=[clusters],figsize=(10,7))
+    plt.title(f"Boxplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+    
+def cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels"):
+    """
+    Visualise categorical count for this feature by cluster.
+    """
+    sns.countplot(x=clusters, hue=feature_name, data=X_rf)
+    plt.title(f"Catplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+```
+
+```python
+cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels")
+```
+
+```python
+cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels")
 ```
 
 #### Mini-batch Kmeans
@@ -1056,7 +1127,8 @@ scatterplot(
 - Qualitative Interviews with over 50 Sustainable Finance experts in France and Luxemburg  
 
 - [Clustering by Passing Messages Between the datapoints](https://science.sciencemag.org/content/315/5814/972)
-- Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.
+- Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.  
+- [Sirus](https://hal.archives-ouvertes.fr/hal-02190689v2)
 
 
 Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
@@ -1064,21 +1136,114 @@ Once we have made satisfactory clusters with our data, we are going to use them 
 
 ## Refinitiv score prediction
 
+
+L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est possible de retrouver les scores ESG de Refinitiv.
+
+
+**L'esprit de la notation ESG Refinitiv:**
+- Performance relative de l'entreprise par rapport à son secteur d'activité sur le E et le S. 
+- Performance relative au pays d'implantation sur le G. 
+
+**La méthodologie de notation ESG Refinitiv:**  
+- Sous-sélection de 186/500 indicateurs comparables
+- Mapping sur chaque indicateur du degré de matérialité d'une problématique sur une échelle de 1 à 10 
+- Transparence très importante sur les métriques définies comme hautement matérielles  
+- Analyse de controverse, avec correction du biais contre les grosses market cap
+
+
+**Par pilier, leur méthodologie varie.**
+- Sur le pilier environnemental, ils prennent d'habitude une médiane par industrie.  
+- Sur le pilier social, ils appliquent la matrice de transparence et pour le %d'employées et le % de représentation, la médiane par industrie.
+- Sur le pilier de la gouvernance, ils regardent l'ensemble des indicateurs.  
+
+
+[Random Forest finetuning](https://towardsdatascience.com/random-forest-hyperparameters-and-how-to-fine-tune-them-17aee785ee0d)
+
+
+Load the data: 
+
 ```python
 filename = "/universe_df_encoded.csv"
+df = pd.read_csv(input_path+filename)
+df["kmean_labels"] = prep_df["kmean_labels"]
+df["Environmental Pillar Score Grade"] = prep_df["Environmental Pillar Score Grade"]
+df["Social Pillar Score Grade"] = prep_df["Social Pillar Score Grade"]
+df["Governance Pillar Score Grade"] = prep_df["Governance Pillar Score Grade"]
+```
+
+Format the data into train and test: 
+
+```python
+drop_cols = [
+    "ESG Score", 
+    "Environmental Pillar Score", 
+    "Social Pillar Score", 
+    "Governance Pillar Score", 
+    "Unnamed: 0", 
+    "Name", 
+    "Symbol", 
+    "Country", # encoded
+    "SEDOL",
+    "ISINS",
+    "GICS Sector Name", # encoded
+    "Industry Name - GICS Sub-Industry",
+    "Critical Country 1",
+    "Critical Country 2",
+    "Critical Country 3",
+    "Critical Country 4",
+]
+
+X, targets = df.drop(columns=drop_cols).copy(), df.loc[:,"ESG Score": "Governance Pillar Score"].copy()
+y = targets.loc[:,"ESG Score"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
+```
+
+Select relevant features:
+
+```python
+importances, masked_importances, r2_full, r2_imp = random_forest_selection(
+    X_train, 
+    X_test, 
+    y_train, 
+    y_test, 
+    threshold=0.005
+)
+
+features = list(masked_importances.features)
+features.append("kmean_labels")
+X_train, X_test = X_train.loc[:,features],  X_test.loc[:,features]
+```
+
+Define your model:
+
+```python
+params = {
+    "n_estimators":300, 
+    "max_depth":20,
+}
+model = RandomForestRegressor(**params)
+```
+
+Fit your model:
+
+```python
+model.fit(X_train,y_train)
 ```
 
 ```python
-X = pd.read_csv(input_path+filename)
+out = pd.DataFrame(y_test).reset_index()
+predictions = model.predict(X_test)
+out["predictions"] = predictions
+cheat = model.predict(X.loc[:,features])
+print(f"R2 score : {r2_score(y, cheat):.2f}")
+out
 ```
 
 ```python
-X.loc[:,"ESG Score": "Governance Pillar Score"]
-```
-
-```python
-for col in X.columns:
-    print(col)
+X["predictions"] = cheat
+X["true"] = df["ESG Score"]
+print(f"R2 score on test: {r2_score(y_test, predictions):.2f}")
+X
 ```
 
 ```python
@@ -1087,6 +1252,8 @@ for col in X.columns:
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Social Pillar Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Governance Pillar Score Grade")
 ```
+
+Let's check whether we accurately predicted the categories:
 
 ```python
 grades_dict = {
