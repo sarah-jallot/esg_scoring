@@ -15,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
 from sklearn.ensemble import RandomForestRegressor
+from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 # Import clustering methods
@@ -30,6 +31,7 @@ from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
 
 
+# Utils
 
 ## Data visualisation
 def boxplot(df, columns, categorical=True, figsize=(10, 8)):
@@ -74,7 +76,8 @@ def scatterplot(df, x_axis, y_axis, hue, title):
         x=df.loc[:, x_axis],
         y=df.loc[:, y_axis],
         palette="Set1",
-        hue=hue, )
+        hue=hue,
+        legend="full")
     plt.title(title)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
@@ -201,7 +204,7 @@ def random_forest_selection(X_train, X_test, y_train, y_test, threshold=0.3):
     y_pred_full = rf_reg.predict(X_test)
     r2_full = r2_score(y_test, y_pred_full)
 
-    importances = pd.DataFrame(list(cluster_df.columns))
+    importances = pd.DataFrame(list(X_train.columns))
     importances["feature_importances"] = rf_reg.feature_importances_
     importances.columns = ["features", "importances"]
     importances = importances.sort_values(by=["importances"], ascending=False).reset_index().copy()
@@ -220,3 +223,25 @@ def random_forest_selection(X_train, X_test, y_train, y_test, threshold=0.3):
     r2_imp = r2_score(y_test, y_pred_imp)
 
     return importances, importances[mask], r2_full, r2_imp
+
+
+# Understand clustering results.
+
+def cluster_boxplot(X_rf, feature_name='CO2 Equivalent Emissions Total', clusters="kmean_labels"):
+    """
+    Visualise boxplot for this feature by cluster.
+    """
+    X_rf.boxplot(feature_name, by=[clusters], figsize=(10, 7))
+    plt.title(f"Boxplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+
+
+def cluster_catplot(X_rf, feature_name="Fundamental Human Rights ILO UN", clusters="kmean_labels"):
+    """
+    Visualise categorical count for this feature by cluster.
+    """
+    sns.countplot(x=clusters, hue=feature_name, data=X_rf)
+    plt.title(f"Catplot of {feature_name} by {clusters}.")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
