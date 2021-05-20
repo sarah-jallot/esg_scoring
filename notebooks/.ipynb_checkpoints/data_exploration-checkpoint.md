@@ -62,7 +62,8 @@ def scatterplot(df, x_axis, y_axis, hue, title):
         x = df.loc[:,x_axis] , 
         y = df.loc[:,y_axis] ,
         palette="Set1",
-        hue = hue,)
+        hue = hue, 
+        legend="full")
     plt.title(title)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
@@ -212,6 +213,9 @@ pp.pprint(df.columns)
 print(f"Our dataframe presents {df.shape[1]} SFDR-related metrics.")
 ```
 
+#### Geographic repartition. 
+
+
 Let's observe the geographic repartition of our dataset.
 
 ```python
@@ -220,9 +224,33 @@ countplot(df,"Country")
 
 The USA is over-represned in our dataset. We only have Western companies.
 
+
+#### Field repartition. 
+
 ```python
 countplot(df,"GICS Sector Name", figsize=(8,8))
 ```
+
+#### Market Capitalization
+
+```python
+columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
+boxplot(df, columns, categorical=False, figsize=(6,6))
+```
+
+```python
+columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
+boxplot(df, columns, categorical=False, figsize=(6,6))
+```
+
+```python
+upper = 100
+mask = df["Market Capitalization (bil) [USD]"] < upper
+columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
+boxplot(df[mask], columns, categorical=False, figsize=(6,6))
+```
+
+#### Boxplots by variable / field
 
 ```python
 countplot(df,"Whistleblower Protection", (6,6))
@@ -233,11 +261,6 @@ Energy, Materials and Utilities present a higher average CO2 emissions total tha
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, categorical=True, figsize=(10,6))
-```
-
-```python
-columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns, categorical=False, figsize=(6,6))
 ```
 
 ```python
@@ -259,6 +282,8 @@ boxplot(df, columns, categorical=True)
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, categorical=True)
 ```
+
+#### Correlation matrix SFDR - ESG Scoring.
 
 ```python
 corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics")
@@ -402,6 +427,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
 from sklearn.ensemble import RandomForestRegressor
+from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 # Import clustering methods
@@ -520,15 +546,7 @@ def cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clus
 
 ```python
 prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
-```
-
-```python
 prep_df.head()
-```
-
-```python
-for col in prep_df.columns:
-    print(col)
 ```
 
 ### Dimensionality reduction techniques
@@ -695,20 +713,80 @@ importances, masked_importances, r2_full, r2_imp = random_forest_selection(
     y_test, 
     threshold=threshold
 )
+print(f"Full R2 score: {r2_full:.2f} versus score after feature selection: {r2_imp:.2f}.")
 ```
 
+Observations: 
+- The two most important features to predict Refinitiv ESG scoring are **governance related** and concern the implementation of a **Human Rights Policy** within the organization.  
+- **Market Capitalization** comes third. This could point to a bias within the data towards capitalization. We know that bigger companies have more resources dedicated to transparency, and that on material issues, Refinitiv applies transparency weights. They might be biased by capitalization even with their corrections.  
+- We observe several occurrences of **CO2 Equivalent Emissions** as a total and by scope 1, 2 and 3, as well as CO2 intensity. It could be interesting to keep only one or two of these variables as they seem close (to be confirmed).  
+- Some variables within our best predictors presented limited coverage : Hazardous Waste for example has 70% missing values.
+
+
+Let's have a look at the countplot within the initial dataframe for Fundamental Human Rights policies:
+
 ```python
-print(f"Full R2 score: {r2_full} versus score after feature selection: {r2_imp}.")
+countplot(df,"Fundamental Human Rights ILO UN")
+print(df["Fundamental Human Rights ILO UN"].value_counts()/df["Fundamental Human Rights ILO UN"].value_counts().sum())
+```
+
+It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
+
+```python
+upper = 10
+mask = df["Market Capitalization (bil) [USD]"] < upper
+scatterplot(
+    df[mask], 
+    x_axis="Market Capitalization (bil) [USD]", 
+    y_axis="ESG Score", 
+    title="ESG Score as a function of Market Cap",
+    hue=None
+)
 ```
 
 ```python
 mask = importances.importances > threshold
 X_rf = cluster_df.loc[:,importances[mask].features]
-X_rf.head()
+X_rf_targets = X_rf.copy()
+X_rf_target["ESG Score"] = prep_df["ESG Score"].copy()
+X_rf_target.head()
+```
+
+We plot correlations for X_rf including the target variable, our ESG Score.
+
+```python
+corrplot(
+    X_rf_target, 
+    vmax=1, 
+    title="Correlation matrix for Random Forest selected features"
+)
 ```
 
 ```python
-corrplot(X_rf, vmax=1, title="Correlation matrix for Random Forest selected features")
+mapping = {
+    'Fundamental Human Rights ILO UN': 'Governance',
+    'Human Rights Policy': 'Governance',
+    'Market Capitalization (bil) [USD]': 'Other',
+    'Board Gender Diversity, Percent': 'Governance', 
+    'CO2 Equivalent Emissions Indirect, Scope 2': 'Environmental',
+    'Salary Gap': 'Social',
+    'Accidents Total': 'Social',
+    'CO2 Equivalent Emissions Direct, Scope 1': 'Environmental',
+    'CO2 Equivalent Emissions Total': 'Environmental',
+    'Hazardous Waste':'Environmental',
+    'CO2 Equivalent Emissions Indirect, Scope 3':'Environmental',
+    'Biodiversity Impact Reduction':'Environmental',
+    'Total Renewable Energy To Energy Use in million':'Environmental',
+    'Total CO2 Equivalent Emissions To Revenues USD in million':'Environmental',
+    'Total Energy Use To Revenues USD in million':'Environmental',
+    'Waste Total':'Environmental',
+    'Waste Recycled Total':'Environmental',
+    'Whistleblower Protection':'Governance',
+}
+pillars = [mapping.get(key) for key in X_rf.columns]
+sns.countplot(pillars, order=dict(Counter(pillars).most_common()).keys())
+plt.title("Pillar count for most important features in our Random Forest.")
+plt.show()
 ```
 
 ```python
@@ -737,19 +815,18 @@ scatterplot(
 # to do 
 ```
 
-```python
-
-```
-
 ### Clustering
 
 
 As such, cluster analysis is an iterative process where subjective evaluation of the identified clusters is fed back into changes to algorithm configuration until a desired or appropriate result is achieved.
 
+
+Our dimensionality reduction process pushes us to retain the 18 features from the Random Forest Algorithm.
+
 ```python
 #X = X_pca
-X = X_kpca
-#X = np.array(X_rf)
+#X = X_kpca
+X = np.array(X_rf)
 ```
 
 #### K-means
@@ -797,7 +874,7 @@ optimal_kmeans.fit(X)
 
 ```python
 prep_df["kmean_labels"] = optimal_kmeans.labels_
-prep_df.head()
+X_rf["kmean_labels"] = optimal_kmeans.labels_
 ```
 
 Now, let's plot our datapoints for each kmeans label.
@@ -813,39 +890,7 @@ scatterplot(
 ```
 
 ```python
-X_rf["kmean_labels"] = optimal_kmeans.labels_
-```
-
-```python
-X_rf
-```
-
-```python
-def cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels"):
-    """
-    Visualise boxplot for this feature by cluster.
-    """
-    X_rf.boxplot(feature_name, by=[clusters],figsize=(10,7))
-    plt.title(f"Boxplot of {feature_name} by {clusters}.")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.show()
-    
-def cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels"):
-    """
-    Visualise categorical count for this feature by cluster.
-    """
-    sns.countplot(x=clusters, hue=feature_name, data=X_rf)
-    plt.title(f"Catplot of {feature_name} by {clusters}.")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.show()
-```
-
-```python
-cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels")
-```
-
-```python
-cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels")
+X_rf.columns
 ```
 
 #### Mini-batch Kmeans
@@ -861,6 +906,7 @@ for k in range(lower, upper):
 
 ```python
 plt.style.use("fivethirtyeight")
+plt.figsize((10,8))
 plt.plot(range(lower+1, upper+1), sse)
 plt.xticks(range(lower+1, upper+1))
 plt.xlabel("Number of Clusters")
@@ -870,19 +916,20 @@ plt.show()
 ```
 
 ```python
-optimal_nb = 6
+optimal_nb = 8
 ```
 
 ```python
-mkmeans_model = MiniBatchKMeans(n_clusters=optimal_nb)
+optimal_mkmeans = MiniBatchKMeans(n_clusters=optimal_nb)
 # fit the model
-mkmeans_model.fit(X)
+optimal_mkmeans.fit(X)
 # assign a cluster to each example
-yhat = mkmeans_model.predict(X)
+yhat = optimal_mkmeans.predict(X)
 ```
 
 ```python
-prep_df["mkmean_labels"] = mkmeans_model.labels_
+prep_df["mkmean_labels"] = optimal_mkmeans.labels_
+X_rf["mkmean_labels"] = optimal_mkmeans.labels_
 ```
 
 ```python
@@ -911,6 +958,7 @@ yhat = aff_model.predict(X)
 
 ```python
 prep_df["aff_labels"] = aff_model.labels_
+X_rf["aff_labels"] = aff_model.labels_
 ```
 
 ```python
@@ -919,7 +967,7 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "aff_labels", 
-    "KPCA coloured by Mini-kmeans"
+    "KPCA coloured by Affinity propagation"
 )
 ```
 
@@ -937,6 +985,7 @@ yhat = agg_model.fit_predict(X)
 
 ```python
 prep_df["agg_labels"] = agg_model.labels_
+X_rf["agg_labels"] = agg_model.labels_
 ```
 
 ```python
@@ -970,6 +1019,7 @@ yhat = birch_model.predict(X)
 
 ```python
 prep_df["birch_labels"] = birch_model.labels_
+X_rf["birch_labels"] = birch_model.labels_
 ```
 
 ```python
@@ -1001,6 +1051,7 @@ yhat = db_model.fit_predict(X)
 
 ```python
 prep_df["dbscan_labels"] = db_model.labels_
+X_rf["dbscan_labels"] = db_model.labels_
 ```
 
 ```python
@@ -1027,6 +1078,7 @@ yhat = mshift_model.fit_predict(X)
 
 ```python
 prep_df["mshift_labels"] = mshift_model.labels_
+X_rf["mshift_labels"] = mshift_model.labels_
 ```
 
 ```python
@@ -1039,7 +1091,7 @@ scatterplot(
 )
 ```
 
-### OPTICS
+#### OPTICS
 
 
 Modified version of DBSCAN. 
@@ -1052,6 +1104,7 @@ yhat = optics_model.fit_predict(X)
 
 ```python
 prep_df["optics_labels"] = optics_model.labels_
+X_rf["optics_labels"] = optics_model.labels_
 ```
 
 ```python
@@ -1066,6 +1119,9 @@ scatterplot(
 
 #### Spectral clustering
 
+```python
+optimal_nb = 6
+```
 
 Here, one uses the top eigenvectors of a matrix derived from the distance between points.
 
@@ -1078,6 +1134,7 @@ yhat = spec_model.fit_predict(X)
 
 ```python
 prep_df["spectral_labels"] = spec_model.labels_
+X_rf["spectral_labels"] = spec_model.labels_
 ```
 
 ```python
@@ -1104,6 +1161,7 @@ gmm_model.fit(X)
 
 ```python
 prep_df["gaussian_labels"] = gmm_model.predict(X)
+X_rf["gaussian_labels"] = gmm_model.predict(X)
 ```
 
 ```python
@@ -1114,6 +1172,36 @@ scatterplot(
     "gaussian_labels", 
     "KPCA coloured by Gaussian Labels"
 )
+```
+
+```python
+X_rf.to_csv(("../inputs/X_rf_labelled.csv"))
+```
+
+### Cluster interpretation and visualisation. 
+
+```python
+continuous_name = "Board Gender Diversity, Percent"
+# 'Market Capitalization (bil) [USD]','CO2 Equivalent Emissions Indirect, Scope 2', 'Salary Gap',
+# 'Accidents Total', 'CO2 Equivalent Emissions Direct, Scope 1',
+# 'CO2 Equivalent Emissions Total', 'Hazardous Waste',
+# 'CO2 Equivalent Emissions Indirect, Scope 3',
+# 'Total Renewable Energy To Energy Use in million','Total CO2 Equivalent Emissions To Revenues USD in million',
+#'Total Energy Use To Revenues USD in million', 'Waste Total',
+#'Waste Recycled Total', 
+# 'CO2 Equivalent Emissions Total'
+categorical_name = "Fundamental Human Rights ILO UN"
+#'Human Rights Policy','Biodiversity Impact Reduction','Whistleblower Protection',
+
+clusters = "kmean_labels"
+```
+
+```python
+cluster_boxplot(X_rf, feature_name = continuous_name, clusters=clusters)
+```
+
+```python
+cluster_catplot(X_rf, feature_name =categorical_name , clusters=clusters)
 ```
 
 ### Bibliography:
