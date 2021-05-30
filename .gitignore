@@ -1,1 +1,6 @@
 venv/
+inputs/
+msci_data
+.DS_Store
+.idea/
+setup.py
