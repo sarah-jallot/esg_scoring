@@ -1,4 +1,4 @@
-# Are Sustainable Finance Disclosure Regulation indicators good ESG Performance predictors? 
+# SFDR & ESG: What does EU regulation tell us of company extra-financial performance?   
 
 We are investigating whether a the subset of Environmental, Social and Governance indicators defined by the Sustainable Finance Disclosure Regulation (SFDR) is a good base to predict company ESG (Environmental, Social, and Governance) performance for a subset of 2,900 companies, mainly based in the United-States. 
 
