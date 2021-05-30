@@ -48,55 +48,34 @@ for symbol in symbol_list:
 ```
 
 ```python
-# Call the ratefinder object's get_esg_rating method, passing in the Apple stock symbol and 
-# a JS timeout of 5 seconds (this is how long the Selenium web driver should wait for JS to execute 
-# before scraping content)
-response = ratefinder.get_esg_rating(
-    symbol=symbols[0],
-    js_timeout=5
-)
-# The response is a dictionary; print it
-#
-```
-
-```python
-response["symbol"] = symbols[0]
-```
-
-```python
-response.
-```
-
-```python
 path_to_json = "../msci_data"
 json_files = [pos_json for pos_json in os.listdir(path_to_json) if pos_json.endswith('.json')]
 ```
 
 ```python
-pd.DataFrame.from_dict("../"+json_files[0])#json_files
-```
+import os, json
+import pandas as pd
 
-```python
-import json
-with open('../'+response["symbol"]+'.json', 'w') as fp:
-    json.dump(response, fp)
-```
+# this finds our json files
+path_to_json = 'json/'
+json_files = [pos_json for pos_json in os.listdir(path_to_json) if pos_json.endswith('.json')]
 
-```python
-df = pd.read_json("../msci_data/0.json")
+# here I define my pandas Dataframe with the columns I want to get from the json
+jsons_data = pd.DataFrame(columns=['country', 'city', 'long/lat'])
 
-for nb in range(2):
-    df = df.append(pd.read_json("../msci_data/"+str(nb+1)+".json"))
-```
+# we need both the json and an index number so use enumerate()
+for index, js in enumerate(json_files):
+    with open(os.path.join(path_to_json, js)) as json_file:
+        json_text = json.load(json_file)
 
-```python
-df
-```
+        # here you need to know the layout of your json and each json has to have
+        # the same structure (obviously not the structure I have here)
+        country = json_text['features'][0]['properties']['country']
+        city = json_text['features'][0]['properties']['name']
+        lonlat = json_text['features'][0]['geometry']['coordinates']
+        # here I push a list of data into a pandas DataFrame at row given by 'index'
+        jsons_data.loc[index] = [country, city, lonlat]
 
-```python
-pd.read_csv("../inputs/universe_df_full_scores.csv")
-```
-
-```python
-
+# now that we have the pertinent json data in our DataFrame let's look at it
+print(jsons_data)
 ```
