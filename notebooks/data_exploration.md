@@ -13,6 +13,9 @@ First, run all necessary imports.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
+from numpy import unique
+from numpy import where
 import seaborn as sns
 import pprint
 from sklearn.preprocessing import OneHotEncoder
@@ -21,14 +24,7 @@ import sys
 sys.path.append("../utils/")
 from utils import *
 
-
-import numpy as np
-from matplotlib.pyplot import figure
-from numpy import unique
-from numpy import where
-from matplotlib import pyplot
 from sklearn.preprocessing import StandardScaler
-
 #Importing required modules
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
@@ -49,221 +45,6 @@ from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
 ```
 
-```python
-# Utils
-
-## Data visualisation
-def boxplot(df, columns, categorical=True, figsize=(10,8)):
-    """
-    Draw categorical boxplot for the series of your choice, excluding missing values. 
-    """
-    data = df.loc[:,columns].dropna()
-    print(f"Boxplot for {len(data)} datapoints out of {len(df)} overall.")
-    
-    fig, ax = plt.subplots(figsize=figsize)
-    plt.setp(ax.get_xticklabels(), rotation=45)
-    if categorical == True:
-        sns.boxplot(
-            x=columns[0],
-            y=columns[1], 
-            data=data
-        )
-    else: 
-        sns.boxplot(
-            y=columns[1], 
-            data=data
-        )
-        
-def countplot(df, category, figsize=(10,6)):
-    """ 
-    Countplot for the category of your choice. 
-    """
-    fig, ax = plt.subplots(figsize=figsize)
-    plt.setp(ax.get_xticklabels(), rotation=45)
-    sns.countplot(
-        x=category, 
-        data=df,
-        order = df[category].value_counts().index)
-    plt.title(f"Countplot by {category}")
-    plt.show()
-    
-def scatterplot(df, x_axis, y_axis, hue, title):
-    sns.scatterplot(
-        data = df, 
-        x = df.loc[:,x_axis] , 
-        y = df.loc[:,y_axis] ,
-        palette="Set1",
-        hue = hue, 
-        legend="full")
-    plt.title(title)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.show()
-    
-def corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics"):
-    corr = df.corr()
-    mask = np.triu(np.ones_like(corr, dtype=bool))
-    
-    f, ax = plt.subplots(figsize=(11, 9))
-    cmap = sns.diverging_palette(230, 20, as_cmap=True)
-    
-    sns.heatmap(corr, 
-                mask=mask, 
-                cmap=cmap,
-                vmax=vmax,
-                center=0,
-                square=True, 
-                linewidths=.5, 
-                cbar_kws={"shrink": .5})
-    plt.title(title)
-    plt.show()   
-    
-
-## Data preprocessing
-def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
-    """
-    Fill missing values for our dataframe. 
-    """
-    df.loc[:,"Critical Country 1":"Critical Country 4"] = df.loc[:,"Critical Country 1":"Critical Country 4"].fillna("None")
-    
-    # Fix GICs industry
-    df.iloc[306,7] = "Electronical Equipment"
-    df.iloc[1739,7] = "Biotechnology"
-    
-    
-    # Fix NaNs by industry
-    for sector in sectors:
-        mask = df.loc[:,"GICS Sector Name"]==sector
-        # Median strategy
-        for feature in median_strategy_cols:
-            nan_value = df[mask].loc[:,feature].median()
-            rows = list(df[mask].index)
-            col = df.columns.get_loc(feature)
-            df.iloc[rows, col] = df.iloc[rows, col].fillna(nan_value)
-        
-        # Conservative hypothesis
-        for category in conservative_cols:
-            nan_value = 0
-            rows = list(df[mask].index)
-            col = df.columns.get_loc(category)
-            df.iloc[rows, col] = df.iloc[rows, col].fillna(nan_value)
-            
-    
-    df = df.drop(columns=drop_cols)
-    return df.dropna()
-
-def one_hot_encode(df, categorical_cols):
-    """
-    One Hot Encode our data. 
-    """
-    enc = OneHotEncoder()
-    X = df.loc[:,categorical_cols]
-    enc.fit(X)
-    temp = pd.DataFrame(enc.transform(X).toarray())
-    temp.columns = enc.get_feature_names()
-    out = pd.concat([df.reset_index(),temp.reset_index()], axis=1).drop(columns=["index"])
-    return out
-
-
-# Utils 
-
-def pca_selection(cluster_df, n_components=200, threshold=0.5, method="cumsum"):
-    """
-    PCA algorithm for feature selection. 
-    """
-    features = np.array(cluster_df)
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(features)
-    
-    pca = PCA(n_components)
-    pca_features = pca.fit_transform(scaled_features)
-    
-    if method == "cumsum":
-        cumsum = np.cumsum(pca.explained_variance_ratio_)
-        last_feature = np.where(cumsum > threshold)[0][0]-1
-        return pca_features, pca, pca_features[:,:last_feature]
-        
-    if method == "feature-wise":
-        mask = pca.explained_variance_ratio_ > threshold
-        return pca_features, pca, pca_features[:,np.where(mask == True)[0]]
-    
-
-def kpca_selection(cluster_df, n_components=200, kernel="rbf", threshold=0.5, method="cumsum"):
-    """
-    Kernel PCA algorithm for feature selection. 
-    """
-    features = np.array(cluster_df)
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(features)
-    
-    kpca = KernelPCA(n_components, kernel=kernel)
-    kpca_features = kpca.fit_transform(scaled_features)
-    
-    explained_variance = np.var(kpca_features, axis=0)
-    explained_variance_ratio = explained_variance / np.sum(explained_variance)
-    
-    if method == "cumsum":
-        cumsum = np.cumsum(explained_variance_ratio)
-        last_feature = np.where(cumsum > threshold)[0][0]-1
-        return kpca_features, kpca, kpca_features[:,:last_feature]
-        
-    if method == "feature-wise":
-        mask = explained_variance_ratio_ > threshold
-        return kpca_features, kpca, kpca_features[:,np.where(mask == True)[0]]
-
-    
-
-def random_forest_selection(X_train,X_test, y_train, y_test, threshold=0.3):
-    """
-    Feature selection by using a random forest regressor.
-    """
-    rf_reg = RandomForestRegressor(n_estimators=100)
-    rf_reg.fit(X_train,y_train)
-    y_pred_full = rf_reg.predict(X_test)
-    r2_full = r2_score(y_test, y_pred_full)
-    
-    importances = pd.DataFrame(list(X_train.columns))
-    importances["feature_importances"] = rf_reg.feature_importances_
-    importances.columns = ["features", "importances"]
-    importances = importances.sort_values(by=["importances"],ascending=False).reset_index().copy()
-    
-
-    mask = importances["importances"] > threshold
-    n_features = len(importances[mask])
-    importances[mask].loc[:,"features":"importances"].plot(kind="barh")
-    plt.yticks(ticks=range(n_features),labels=importances[:n_features]["features"])
-    plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
-    plt.show()
-    
-    X_important = X_train.loc[:,importances[mask].features]
-    rf_reg_important = RandomForestRegressor(n_estimators=100)
-    rf_reg_important.fit(X_important,y_train)
-    y_pred_imp = rf_reg_important.predict(X_test.loc[:,importances[mask].features])
-    r2_imp = r2_score(y_test, y_pred_imp)
-    
-    return importances, importances[mask], r2_full, r2_imp
-
-
-# Understand clustering results. 
-
-def cluster_boxplot(X_rf, feature_name = 'CO2 Equivalent Emissions Total', clusters="kmean_labels"):
-    """
-    Visualise boxplot for this feature by cluster.
-    """
-    X_rf.boxplot(feature_name, by=[clusters],figsize=(10,7))
-    plt.title(f"Boxplot of {feature_name} by {clusters}.")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.show()
-    
-def cluster_catplot(X_rf, feature_name = "Fundamental Human Rights ILO UN", clusters="kmean_labels"):
-    """
-    Visualise categorical count for this feature by cluster.
-    """
-    sns.countplot(x=clusters, hue=feature_name, data=X_rf)
-    plt.title(f"Catplot of {feature_name} by {clusters}.")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.show()
-```
-
 Then, download your data.
 
 ```python
@@ -274,15 +55,8 @@ output_path = "../outputs/"
 
 ```python
 initial_df = pd.read_csv(input_path+input_filename)
-```
-
-```python
 initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
-initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index"])
-initial_df = initial_df.drop(columns=["CARBON_FOOTPRINT"])
-```
-
-```python
+initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
 initial_df.head()
 ```
 
@@ -321,6 +95,65 @@ sfdr_metrics = {
     'TR.PolicyBriberyCorruption': 'Anti-corruption and Anti-bribery',
     'TR.AnalyticBriberyFraudControv':'Anti-corruption and Anti-bribery',
 }
+
+# And the mapping of each metric to a pillar
+pillar_mapping = {
+    # Environmental
+    'CO2 Equivalent Emissions Total': 'Environmental',
+    'CO2 Equivalent Emissions Direct, Scope 1': 'Environmental',
+    'CO2 Equivalent Emissions Indirect, Scope 2': 'Environmental',
+    'CO2 Equivalent Emissions Indirect, Scope 3':'Environmental',
+    'Total CO2 Equivalent Emissions To Revenues USD in million':'Environmental',
+    'Total Renewable Energy To Energy Use in million': "Environmental",
+    'Total Energy Use To Revenues USD in million': "Environmental",
+    'Biodiversity Impact Reduction': "Environmental",
+    'Water Pollutant Emissions To Revenues USD in million': "Environmental",
+    'Hazardous Waste': "Environmental", 
+    'Waste Total': "Environmental", 
+    'Waste Recycled Total': "Environmental",
+    
+    # Social
+    'Salary Gap':"Social",
+    'Accidents Total':"Social",
+    'Critical Country 1':"Social",
+    'Critical Country 2':"Social", 
+    'Critical Country 3':"Social", 
+    'Critical Country 4':"Social",
+    'Board Gender Diversity, Percent':"Social", 
+    
+    # Governance
+    'Whistleblower Protection': "Governance",
+    'Fundamental Human Rights ILO UN': "Governance", 
+    'Human Rights Policy': "Governance", 
+    'Anti-Personnel Landmines':"Governance",
+    'Bribery, Corruption and Fraud Controversies':"Governance", 
+    
+    # Target
+    'ESG Score Grade':"Target",
+    'Environmental Pillar Score Grade':"Target", 
+    'Social Pillar Score Grade':"Target",
+    'Governance Pillar Score Grade':"Target", 
+    'Environmental Innovation Score Grade':"Target",
+    'CSR Strategy Score Grade':"Target", 
+    'ESG Score':"Target", 
+    'Environmental Pillar Score':"Target",
+    'Social Pillar Score':"Target", 
+    'Governance Pillar Score':"Target",
+    
+    # Other
+    'Total CO2 Equivalent Emissions To Revenues USD Score':"Other",
+    'Environmental Innovation Score':"Other", 
+    'CSR Strategy Score':"Other",
+    'Market Capitalization (bil) [USD]': 'Other',
+    'Name':'Other',
+    'Symbol':'Other', 
+    'Country':'Other', 
+    'Industry Name - GICS Sub-Industry':'Other', 
+    'SEDOL':'Other', 
+    'ISINS':'Other',
+    'GICS Sector Name':'Other', 
+    'NACE Classification':'Other',
+}
 ```
 
 ### Data exploration without using any ESG scoring.
@@ -328,6 +161,19 @@ sfdr_metrics = {
 
 We exclude ESG notations by Refinitiv from our data exploration, as we will use them only later for verification purposes.  
 Note that Refinitiv adopts a **best-in-class** methodology, meaning that our clusters may not correspond to theirs as we run our analysis for all fields together. 
+
+```python
+data = [pillar_mapping[key] for key in list(initial_df.columns)]
+data = list(filter(lambda a: a != "Other", data))
+data = list(filter(lambda a: a != "Target", data))
+sns.countplot(data, order = dict(Counter(data).most_common()).keys())
+plt.title("SFDR Metrics, Count by pillar.")
+plt.show()
+for key in dict(Counter(data)).keys():
+    print(f"{key}: {dict(Counter(data))[key]/sum(list(Counter(data).values()))*100:.1f} percent")
+```
+
+Most metrics we tracked are Environmental. They represent 50% of all features. Social comes second with ~30% of all metrics, followed by Governance. 
 
 ```python
 # Simply remove ESG notations for our analysis
@@ -748,7 +594,7 @@ scatterplot(
 ```python
 mask = importances.importances > threshold
 X_rf = cluster_df.loc[:,importances[mask].features]
-X_rf_targets = X_rf.copy()
+X_rf_target = X_rf.copy()
 X_rf_target["ESG Score"] = prep_df["ESG Score"].copy()
 X_rf_target.head()
 ```
@@ -763,32 +609,21 @@ corrplot(
 )
 ```
 
+Coming from the USA is slightly negatively correlated to ESG Scoring. We could infer that American companies perform less well than European ones according to Refinitiv, although they are overrepresented in our dataset.
+
 ```python
-mapping = {
-    'Fundamental Human Rights ILO UN': 'Governance',
-    'Human Rights Policy': 'Governance',
-    'Market Capitalization (bil) [USD]': 'Other',
-    'Board Gender Diversity, Percent': 'Governance', 
-    'CO2 Equivalent Emissions Indirect, Scope 2': 'Environmental',
-    'Salary Gap': 'Social',
-    'Accidents Total': 'Social',
-    'CO2 Equivalent Emissions Direct, Scope 1': 'Environmental',
-    'CO2 Equivalent Emissions Total': 'Environmental',
-    'Hazardous Waste':'Environmental',
-    'CO2 Equivalent Emissions Indirect, Scope 3':'Environmental',
-    'Biodiversity Impact Reduction':'Environmental',
-    'Total Renewable Energy To Energy Use in million':'Environmental',
-    'Total CO2 Equivalent Emissions To Revenues USD in million':'Environmental',
-    'Total Energy Use To Revenues USD in million':'Environmental',
-    'Waste Total':'Environmental',
-    'Waste Recycled Total':'Environmental',
-    'Whistleblower Protection':'Governance',
-}
-pillars = [mapping.get(key) for key in X_rf.columns]
+pillars = [pillar_mapping.get(key) for key in X_rf.columns]
+pillars = list(filter(lambda a: a != "Other", pillars))
+pillars = list(filter(lambda a: a != "Target", pillars))
 sns.countplot(pillars, order=dict(Counter(pillars).most_common()).keys())
 plt.title("Pillar count for most important features in our Random Forest.")
 plt.show()
+
+for key in dict(Counter(pillars)).keys():
+    print(f"{key}: {dict(Counter(pillars))[key]/sum(list(Counter(pillars).values()))*100:.1f} percent")
 ```
+
+Environmental metrics are over-represented within our dataset versus original metrics. We see that coming from the USA is used as a predictor in ESG Scoring, a relationship we will investigate.
 
 ```python
 scatterplot(

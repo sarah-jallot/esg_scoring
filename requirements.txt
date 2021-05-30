@@ -189,6 +189,7 @@ protobuf==3.9.2
 psutil==5.6.3
 ptyprocess==0.6.0
 py==1.8.0
+py-msci-esg==0.0.8
 py4j==0.10.7
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
@@ -248,6 +249,7 @@ scikit-learn==0.21.3
 scipy==1.4.1
 Scrapy==1.8.0
 seaborn==0.9.0
+selenium==3.141.0
 Send2Trash==1.5.0
 service-identity==18.1.0
 simplegeneric==0.8.1

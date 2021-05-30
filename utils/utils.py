@@ -245,3 +245,6 @@ def cluster_catplot(X_rf, feature_name="Fundamental Human Rights ILO UN", cluste
     plt.title(f"Catplot of {feature_name} by {clusters}.")
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
+
+
+#source venv/bin/activate
