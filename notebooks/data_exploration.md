@@ -1,13 +1,20 @@
 <!-- #region -->
-# Data exploration and initial clustering.
+# Data exploration, clustering, and ESG Score prediction. 
 In this notebook, our reference universe will correspond to all authorized stocks within the **Natixis Investment Managers Challenge, 2021 edition**. It comprises over **2,821 companies** for which we retrieved ESG data for year 2020. 
   
 
  
-Our goal is to use **Sustainable Finance Disclosure Regulation (SFDR)** metrics to perform clustering on these companies without using Refinitiv's own notation. Ultimately, we would like to build our own explainable score for the data.
+Our goal is to use **Sustainable Finance Disclosure Regulation (SFDR)** metrics to predict company ESG performance.  
+We will do this in three ways: 
+- By performing clustering on these companies based on SFDR metrics, and analysing our results. 
+- By predicting the companies' ESG Score according to three data providers: Thompson-Reuters, MSCI, and CSRHub.  
+- Ultimately, we aim to build our own robust & transaparent ESG Score based on our research work. 
 <!-- #endregion -->
 
 First, run all necessary imports.
+
+
+# Imports
 
 ```python
 import pandas as pd
@@ -45,7 +52,14 @@ from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
 ```
 
-Then, download your data.
+# Data exploration
+
+
+We exclude ESG notations by Refinitiv from our data exploration, as we will use them only later for verification purposes.  
+Note that Refinitiv adopts a **best-in-class** methodology, meaning that our clusters may not correspond to theirs as we run our analysis for all fields together. 
+
+
+First, download your data.
 
 ```python
 input_path = "../inputs/"
@@ -55,14 +69,12 @@ output_path = "../outputs/"
 
 ```python
 initial_df = pd.read_csv(input_path+input_filename).drop(columns=["Unnamed: 0"])
-#initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
-#initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
+print(initial_df.shape)
 initial_df.head()
 ```
 
-```python
-initial_df.shape
-```
+#### a) SFDR metrics
+
 
 Here you will find the list of all SFDR metrics we subselected to make our choice:
 
@@ -76,8 +88,7 @@ sfdr_metrics = {
     'TR.CO2IndirectScope3': "GHG Emissions",
     'carbon_footprint': "GHG Emissions",
     'TR.AnalyticCO2': "GHG Emissions",
-   # 'TR.EnergyUseTotal':"Energy Efficiency",
-    'TR.AnalyticTotalRenewableEnergy':"Energy Efficiency", # il faut faire 1-ça
+    'TR.AnalyticTotalRenewableEnergy':"Energy Efficiency",
     'TR.AnalyticEnergyUse':'Energy Efficiency', # globally and by NACE sector, GJ/M$
     'TR.BiodiversityImpactReduction':"Biodiversity", # does the company monitor its impact
     'TR.AnalyticDischargeWaterSystem':"Water", # ton emissions / $M
@@ -160,11 +171,15 @@ pillar_mapping = {
 }
 ```
 
-### Data exploration without using any ESG scoring.
+To comply with SFDR requirements, we are missing data on:  
+- Biodiversity. Red List species / adjacent to sites. 
+- Deforestation
+- Water stress, untreated discharged waste water
+- Due diligence on human rights, human trafficking  
+- Number of convictions for anti-corruption
 
 
-We exclude ESG notations by Refinitiv from our data exploration, as we will use them only later for verification purposes.  
-Note that Refinitiv adopts a **best-in-class** methodology, meaning that our clusters may not correspond to theirs as we run our analysis for all fields together. 
+Before we deep-dive into the data, let's study our metric pillar distribution: 
 
 ```python
 data = [pillar_mapping[key] for key in list(initial_df.columns)]
@@ -180,18 +195,13 @@ for key in dict(Counter(data)).keys():
 ```
 
 Most metrics we tracked are Environmental. They represent 50% of all features. Social comes second with ~30% of all metrics, followed by Governance. 
+We remove ESG notations and scores from our dataframe for our data exploration. 
 
 ```python
 # Simply remove ESG notations for our analysis
 df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
-```
-
-```python
 pp = pprint.PrettyPrinter(indent=4)
-pp.pprint(df.columns)
-```
-
-```python
+pp.pprint(list(df.columns))
 print(f"Our dataframe presents {df.shape[1]-6} SFDR-related metrics.")
 ```
 
@@ -204,7 +214,8 @@ Let's observe the geographic repartition of our dataset.
 countplot(df,"Country", filename="country_distribution.png")
 ```
 
-The USA is over-represned in our dataset. We only have Western companies.
+The USA is over-represented in our dataset, and we only work on Western companies.  
+Consider that for data processing purposes, when retrieving Thompson-Reuters data, we kept the first occurrence of a company, often labelled as USA. This means that companies under the "USA" flag occurred in our initial dataset in other geographical locations. 
 
 
 #### Field repartition. 
@@ -213,11 +224,13 @@ The USA is over-represned in our dataset. We only have Western companies.
 countplot(df,"GICS Sector Name", filename="sector_distribution.png", figsize=(8,8))
 ```
 
+Here we see Industrials over-represented in our dataset along with Financials.
+
+
 #### Market Capitalization
 
 ```python
-columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns,  filename="board_gender_div_sector.png", categorical=False, figsize=(6,6))
+
 ```
 
 ```python
@@ -238,12 +251,17 @@ boxplot(df[mask], columns,  filename="market_cap_100_sector.png", categorical=Fa
 countplot(df,"Whistleblower Protection", filename="whistleblower.png", figsize=(6,6))
 ```
 
-Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
+```python
+columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
+boxplot(df, columns,  filename="board_gender_div_sector.png", categorical=False, figsize=(6,6))
+```
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, filename="CO2_equivalent_total_sector.png", categorical=True, figsize=(10,6))
 ```
+
+Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
 
 ```python
 columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
@@ -264,6 +282,13 @@ boxplot(df, columns, filename="CO2_emissions_scope3_sector.png",categorical=True
 
 ```python
 corrplot(df, filename="correlation_matrix.png", vmax=1, title="Correlation matrix for SFDR metrics")
+```
+
+#### ESG Scoring study 
+
+```python
+columns = ["GICS Sector Name", "ESG Score"]
+boxplot(initial_df, columns, filename="ESG_score_sector.png", categorical=True)
 ```
 
 ### Data preprocessing
@@ -373,12 +398,12 @@ print(f"We are left with data for {df_fillna.shape[0]} companies.")
 ```
 
 ```python
-#df_fillna.to_csv("../inputs/universe_df_no_nans.csv")
+#df_fillna.to_csv("../inputs/universe_df_no_nans.csv", index=False)
 df_fillna_msci = pd.read_csv("../inputs/universe_df_msci_added.csv")
 ```
 
 ```python
-df_fillna.columns
+pp.pprint(list(df_fillna.columns))
 ```
 
 Then, define the columns to encode using a OneHotEncoder. 
@@ -413,30 +438,22 @@ df_encoded.head()
 ```
 
 ```python
-df_encoded.to_csv("../inputs/universe_df_encoded.csv")
-df_encoded_msci.to_csv("../inputs/universe_df_encoded_msci.csv")
+df_encoded.to_csv("../inputs/universe_df_encoded.csv", index=False)
+df_encoded_msci.to_csv("../inputs/universe_df_encoded_msci.csv", index=False)
 ```
 
 ### Basic clustering without msci data.
 
 ```python
-prep_df = pd.read_csv("../inputs/universe_df_encoded.csv").drop(columns=["Unnamed: 0"])
+prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
+print(prep_df.shape)
 prep_df.head()
-```
-
-```python
-prep_df.shape
 ```
 
 ### Dimensionality reduction techniques
 
 
-#### a) PCA
-
-
-Note that PCA works for data that is linearly separable. Given the complexity of our data, this may well not be the case as we will explore here.
-
-
+Note that PCA works for data that is linearly separable. Given the complexity of our data, this may well not be the case as we will explore here.  
 First, we drop non-numerical columns.
 
 ```python
@@ -462,23 +479,20 @@ drop_cols = [
     "Governance Pillar Score Grade",
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
-```
-
-```python
-cluster_df.to_csv("../inputs/universe_clusters.csv")
-```
-
-```python
 print(cluster_df.shape)
 cluster_df.head()
 ```
 
 ```python
+cluster_df.to_csv("../inputs/universe_clusters.csv", index=False)
+```
+
+#### a) PCA
+
+```python
 threshold = 0.8
 method = "cumsum"
 ```
-
-We then scale our data to be able to perform a PCA on it using scikit learn.
 
 ```python
 full_pca_features, pca, selected_features = pca_selection(cluster_df, threshold=threshold, method=method)
@@ -619,6 +633,11 @@ print(df["Fundamental Human Rights ILO UN"].value_counts()/df["Fundamental Human
 df.groupby("Fundamental Human Rights ILO UN").mean().loc[:,["Market Capitalization (bil) [USD]", "ESG Score"]]
 ```
 
+```python
+columns = ["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"]
+catplot(df, columns, figsize=(11,0.5))
+```
+
 It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
 
 ```python
@@ -741,11 +760,8 @@ Our dimensionality reduction process pushes us to retain the 18 features from th
 ```python
 #X = X_pca
 #X = X_kpca
-X = np.array(X_rf)
-```
-
-```python
-# normaliser ! 
+scaler = StandardScaler()
+X = scaler.fit_transform(np.array(X_rf))
 ```
 
 ```python
@@ -1130,7 +1146,7 @@ scatterplot(
 ```
 
 ```python
-X_rf.to_csv(("../inputs/X_rf_labelled.csv"))
+X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
 ```
 
 ### Cluster interpretation and visualisation. 
@@ -1202,6 +1218,42 @@ L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est p
 
 [Random Forest finetuning](https://towardsdatascience.com/random-forest-hyperparameters-and-how-to-fine-tune-them-17aee785ee0d)
 
+
+### ESG Scoring data exploration
+
+```python
+pred_df = pd.read_csv("../inputs/universe_df_encoded_msci.csv")
+print(pred_df.shape)
+pred_df.head()
+```
+
+```python
+countplot(pred_df,"ESG Score Grade", filename="ESG_score_distribution.png")
+```
+
+```python
+sns.countplot(x="MSCI_rating", hue="GICS Sector Name", data=pred_df)
+plt.figsize((10,10))
+plt.show()
+```
+
+```python
+countplot(pred_df,"MSCI_rating", filename="ESG_score_distribution.png")
+```
+
+```python
+
+```
+
+```python
+columns = ["GICS Sector Name", "ESG Score"]
+boxplot(pred_df, columns, filename="ESG_score_sector.png", categorical=True)
+```
+
+```python
+columns = ["GICS Sector Name", "MSCI_rating"]
+boxplot(pred_df, columns, filename="MSCI_ESG_score_sector.png", categorical=True)
+```
 
 Load the data: 
 

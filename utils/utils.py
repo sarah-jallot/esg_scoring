@@ -111,6 +111,16 @@ def corrplot(df, filename, vmax=1, title="Correlation matrix for SFDR metrics"):
     plt.savefig('images/' + filename)
     plt.show()
 
+def catplot(df, columns=["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"], figsize=(10,0.5)):
+    sns.catplot(
+        x=columns[0],
+        hue=columns[1],
+        col=columns[2],
+        data=df,
+        kind="count",
+        height=figsize[0],
+        aspect=figsize[1])
+    plt.show()
 
 ## Data preprocessing
 def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
