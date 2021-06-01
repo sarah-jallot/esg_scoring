@@ -36,7 +36,7 @@ from msci_esg.ratefinder import ESGRateFinder
 
 
 ## Data visualisation
-def boxplot(df, columns, categorical=True, figsize=(10, 8)):
+def boxplot(df, columns, filename, categorical=True, figsize=(10, 8)):
     """
     Draw categorical boxplot for the series of your choice, excluding missing values.
     """
@@ -51,24 +51,31 @@ def boxplot(df, columns, categorical=True, figsize=(10, 8)):
             y=columns[1],
             data=data
         )
+        plt.savefig('images/' + filename)
     else:
         sns.boxplot(
             y=columns[1],
             data=data
         )
+        plt.savefig('images/' + filename)
 
 
-def countplot(df, category, figsize=(10, 6)):
+def countplot(df, category, filename, figsize=(10, 6)):
     """
     Countplot for the category of your choice.
     """
     fig, ax = plt.subplots(figsize=figsize)
     plt.setp(ax.get_xticklabels(), rotation=45)
-    sns.countplot(
+    chart = sns.countplot(
         x=category,
         data=df,
         order=df[category].value_counts().index)
+    for p in chart.patches:
+        chart.annotate("%.0f" % p.get_height(), (p.get_x() + p.get_width() / 2., p.get_height()),
+                       ha='center', va='center', fontsize=10, color='black', xytext=(0, 5),
+                       textcoords='offset points')
     plt.title(f"Countplot by {category}")
+    plt.savefig('images/'+filename)
     plt.show()
 
 
@@ -85,7 +92,7 @@ def scatterplot(df, x_axis, y_axis, hue, title):
     plt.show()
 
 
-def corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics"):
+def corrplot(df, filename, vmax=1, title="Correlation matrix for SFDR metrics"):
     corr = df.corr()
     mask = np.triu(np.ones_like(corr, dtype=bool))
 
@@ -101,6 +108,7 @@ def corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics"):
                 linewidths=.5,
                 cbar_kws={"shrink": .5})
     plt.title(title)
+    plt.savefig('images/' + filename)
     plt.show()
 
 
@@ -113,8 +121,25 @@ def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
         "None")
 
     # Fix GICs industry
-    df.iloc[306, 7] = "Electronical Equipment"
-    df.iloc[1739, 7] = "Biotechnology"
+    subsector_to_sector = {
+        'Multi-Sector Holdings': "Financials Sector",
+        'Heavy Electrical Equipment': "Industrials",
+        'Electronic Equipment & Instruments': "Information Technology",
+        'Construction Machinery & Heavy Trucks': "Industrials",
+        'Technology Hardware, Storage & Peripherals': "Information Technology",
+        'Interactive Media & Services': "Communication Services",
+        'Building Products': "Industrials",
+        'Diversified Metals & Mining': "Materials",
+        'Industrial Conglomerates': "Industrial Conglomerates",
+        'Semiconductors': "Information Technology",
+        'Application Software': "Information Technology",
+        'Trading Companies & Distributors': "Industrials",
+        'Biotechnology': "Biotechnology",
+        'IT Consulting & Other Services': "Information Technology",
+        'Aerospace & Defense': "Industrials",
+        'Interactive Home Entertainment': "Communication Home Services",
+    }
+    df.iloc[df[df["GICS Sector Name"].isna()].index,list(df.columns).index("GICS Sector Name")] = df[df["GICS Sector Name"].isna()]["Industry Name - GICS Sub-Industry"].map(subsector_to_sector)
 
     # Fix NaNs by industry
     for sector in sectors:
@@ -134,7 +159,7 @@ def fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols):
             df.iloc[rows, col] = df.iloc[rows, col].fillna(nan_value)
 
     df = df.drop(columns=drop_cols)
-    return df.dropna()
+    return df
 
 
 def one_hot_encode(df, categorical_cols):
@@ -257,9 +282,9 @@ def load_df(input_path, input_filename):
     Load the universe dataframe to get the symbols.
     """
     initial_df = pd.read_csv(input_path + input_filename)
-    initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
-    initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(
-        columns=["Unnamed: 0", "Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
+   # initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
+   # initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index()
+    initial_df = initial_df.drop(columns=["Unnamed: 0"])#, "Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
     return initial_df
 
 
@@ -305,7 +330,7 @@ def generate_msci_df(path_to_json="../msci_data"):
 
 
 def add_msci(initial_df, path_to_json="../msci_data"):
-    jsons_data = generate_msci_df(path_to_json="../msci_data")
+    jsons_data = generate_msci_df(path_to_json=path_to_json)
     initial_df_msci = pd.merge(initial_df, jsons_data, how="left", left_on="Symbol", right_on=["Symbol"])
 
     clean_dicts = clean_dictionaries(initial_df_msci)
@@ -345,6 +370,6 @@ def expand_history(clean_dicts):
             msci_2018 = my_dict.get("18", None)
             msci_2019 = my_dict.get("19", None)
             msci_2020 = my_dict.get("20", None)
-        df.loc[index] = [msci_2016, msci_2017, msci_2018, msci_2019, msci_2020]
+            df.loc[index] = [msci_2016, msci_2017, msci_2018, msci_2019, msci_2020]
     return df
     #source venv/bin/activate

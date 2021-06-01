@@ -1,6 +1,6 @@
 <!-- #region -->
 # Data exploration and initial clustering.
-In this notebook, our reference universe will correspond to all authorized stocks within the **Natixis Investment Managers Challenge, 2021 edition**. It comprises over **2,000 companies** for which we retrieved ESG data for year 2020. 
+In this notebook, our reference universe will correspond to all authorized stocks within the **Natixis Investment Managers Challenge, 2021 edition**. It comprises over **2,821 companies** for which we retrieved ESG data for year 2020. 
   
 
  
@@ -49,15 +49,19 @@ Then, download your data.
 
 ```python
 input_path = "../inputs/"
-input_filename = "universe_df_full_scores.csv"
+input_filename = "universe_df_esg.csv"
 output_path = "../outputs/"
 ```
 
 ```python
-initial_df = pd.read_csv(input_path+input_filename)
-initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
-initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
+initial_df = pd.read_csv(input_path+input_filename).drop(columns=["Unnamed: 0"])
+#initial_df = initial_df.drop_duplicates(subset=['ISINS']).reset_index().drop(columns=["index"])
+#initial_df = initial_df.drop_duplicates(subset=['Name']).reset_index().drop(columns=["Unnamed: 0","Unnamed: 0.1", "index", "Unnamed: 0.1.1"])
 initial_df.head()
+```
+
+```python
+initial_df.shape
 ```
 
 Here you will find the list of all SFDR metrics we subselected to make our choice:
@@ -167,10 +171,12 @@ data = [pillar_mapping[key] for key in list(initial_df.columns)]
 data = list(filter(lambda a: a != "Other", data))
 data = list(filter(lambda a: a != "Target", data))
 sns.countplot(data, order = dict(Counter(data).most_common()).keys())
-plt.title("SFDR Metrics, Count by pillar.")
+plt.title("SFDR Metrics, Count by pillar")
+plt.savefig('images/sfdr_distribution.png')
 plt.show()
 for key in dict(Counter(data)).keys():
     print(f"{key}: {dict(Counter(data))[key]/sum(list(Counter(data).values()))*100:.1f} percent")
+
 ```
 
 Most metrics we tracked are Environmental. They represent 50% of all features. Social comes second with ~30% of all metrics, followed by Governance. 
@@ -186,7 +192,7 @@ pp.pprint(df.columns)
 ```
 
 ```python
-print(f"Our dataframe presents {df.shape[1]} SFDR-related metrics.")
+print(f"Our dataframe presents {df.shape[1]-6} SFDR-related metrics.")
 ```
 
 #### Geographic repartition. 
@@ -195,7 +201,7 @@ print(f"Our dataframe presents {df.shape[1]} SFDR-related metrics.")
 Let's observe the geographic repartition of our dataset.
 
 ```python
-countplot(df,"Country")
+countplot(df,"Country", filename="country_distribution.png")
 ```
 
 The USA is over-represned in our dataset. We only have Western companies.
@@ -204,68 +210,68 @@ The USA is over-represned in our dataset. We only have Western companies.
 #### Field repartition. 
 
 ```python
-countplot(df,"GICS Sector Name", figsize=(8,8))
+countplot(df,"GICS Sector Name", filename="sector_distribution.png", figsize=(8,8))
 ```
 
 #### Market Capitalization
 
 ```python
 columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns, categorical=False, figsize=(6,6))
+boxplot(df, columns,  filename="board_gender_div_sector.png", categorical=False, figsize=(6,6))
 ```
 
 ```python
 columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df, columns, categorical=False, figsize=(6,6))
+boxplot(df, columns,  filename="market_cap_sector.png", categorical=False, figsize=(6,6))
 ```
 
 ```python
 upper = 100
 mask = df["Market Capitalization (bil) [USD]"] < upper
 columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df[mask], columns, categorical=False, figsize=(6,6))
+boxplot(df[mask], columns,  filename="market_cap_100_sector.png", categorical=False, figsize=(6,6))
 ```
 
 #### Boxplots by variable / field
 
 ```python
-countplot(df,"Whistleblower Protection", (6,6))
+countplot(df,"Whistleblower Protection", filename="whistleblower.png", figsize=(6,6))
 ```
 
 Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
-boxplot(df, columns, categorical=True, figsize=(10,6))
+boxplot(df, columns, filename="CO2_equivalent_total_sector.png", categorical=True, figsize=(10,6))
 ```
 
 ```python
 columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns, categorical=True)
+boxplot(df, columns, filename="board_gender_diversity_sector.png", categorical=True)
 ```
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Indirect, Scope 2"]
-boxplot(df, columns, categorical=True)
+boxplot(df, columns, filename="CO2_emissions_scope2_sector.png", categorical=True)
 ```
 
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Indirect, Scope 3"]
-boxplot(df, columns, categorical=True)
-```
-
-```python
-columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
-boxplot(df, columns, categorical=True)
+boxplot(df, columns, filename="CO2_emissions_scope3_sector.png",categorical=True)
 ```
 
 #### Correlation matrix SFDR - ESG Scoring.
 
 ```python
-corrplot(df, vmax=1, title="Correlation matrix for SFDR metrics")
+corrplot(df, filename="correlation_matrix.png", vmax=1, title="Correlation matrix for SFDR metrics")
 ```
 
 ### Data preprocessing
+
+```python
+initial_df = pd.read_csv(input_path+input_filename).drop(columns=["Unnamed: 0"])
+df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
+```
 
 ```python
 # Add columns to full df
@@ -281,7 +287,6 @@ df["ESG Score"] = initial_df["ESG Score"]
 df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
 df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
 df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
-
 df["ESG Score Grade"] = initial_df["ESG Score Grade"]
 df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
 df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
@@ -351,8 +356,29 @@ df_fillna = fillna(df, sectors, median_strategy_cols, conservative_cols, drop_co
 df_fillna.head()
 ```
 
+We now check that we have few missing values: 
+
 ```python
-df_fillna.shape
+df_fillna.isna().sum()
+```
+
+We can now safely drop rows with missing values.
+
+```python
+df_fillna = df_fillna.dropna()
+```
+
+```python
+print(f"We are left with data for {df_fillna.shape[0]} companies.")
+```
+
+```python
+#df_fillna.to_csv("../inputs/universe_df_no_nans.csv")
+df_fillna_msci = pd.read_csv("../inputs/universe_df_msci_added.csv")
+```
+
+```python
+df_fillna.columns
 ```
 
 Then, define the columns to encode using a OneHotEncoder. 
@@ -379,6 +405,7 @@ categorical_cols = [
 
 ```python
 df_encoded = one_hot_encode(df_fillna, categorical_cols)
+df_encoded_msci = one_hot_encode(df_fillna_msci, categorical_cols)
 ```
 
 ```python
@@ -387,13 +414,18 @@ df_encoded.head()
 
 ```python
 df_encoded.to_csv("../inputs/universe_df_encoded.csv")
+df_encoded_msci.to_csv("../inputs/universe_df_encoded_msci.csv")
 ```
 
-### Basic clustering
+### Basic clustering without msci data.
 
 ```python
-prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
+prep_df = pd.read_csv("../inputs/universe_df_encoded.csv").drop(columns=["Unnamed: 0"])
 prep_df.head()
+```
+
+```python
+prep_df.shape
 ```
 
 ### Dimensionality reduction techniques
@@ -409,7 +441,6 @@ First, we drop non-numerical columns.
 
 ```python
 drop_cols = [
-    "Unnamed: 0",
     "Name",
     "Symbol",
     "Country",
@@ -428,13 +459,18 @@ drop_cols = [
     "ESG Score Grade",
     "Environmental Pillar Score Grade", 
     "Social Pillar Score Grade", 
-    "Governance Pillar Score Grade" 
+    "Governance Pillar Score Grade",
 ]
 cluster_df = prep_df.drop(columns=drop_cols).copy()
 ```
 
 ```python
 cluster_df.to_csv("../inputs/universe_clusters.csv")
+```
+
+```python
+print(cluster_df.shape)
+cluster_df.head()
 ```
 
 ```python
@@ -459,6 +495,7 @@ plt.xlabel("Number of components")
 plt.ylabel("Explained variance")
 plt.xticks(ticks=ticks, labels=labels)
 plt.title("PCA feature selection")
+plt.savefig("images/PCA_feature_selection.png")
 plt.show()
 ```
 
@@ -468,7 +505,8 @@ plt.plot(pca.explained_variance_ratio_)
 plt.xlabel("Number of components")
 plt.ylabel("Explained variance %")
 plt.xticks(ticks=ticks, labels=labels)
-plt.title("PCA feature selection")
+plt.title("PCA feature selection, explained variance in %")
+plt.savefig("images/PCA_feature_selection_percent.png")
 plt.show()
 ```
 
@@ -573,8 +611,12 @@ Observations:
 Let's have a look at the countplot within the initial dataframe for Fundamental Human Rights policies:
 
 ```python
-countplot(df,"Fundamental Human Rights ILO UN")
+countplot(df,category="Fundamental Human Rights ILO UN", filename="human_rights.png", )
 print(df["Fundamental Human Rights ILO UN"].value_counts()/df["Fundamental Human Rights ILO UN"].value_counts().sum())
+```
+
+```python
+df.groupby("Fundamental Human Rights ILO UN").mean().loc[:,["Market Capitalization (bil) [USD]", "ESG Score"]]
 ```
 
 It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
@@ -592,6 +634,42 @@ scatterplot(
 ```
 
 ```python
+scatterplot(
+    df, 
+    x_axis="Board Gender Diversity, Percent", 
+    y_axis="ESG Score", 
+    title="ESG Score as a function of Board gender diversity, %",
+    hue=None
+)
+```
+
+```python
+mask = df["Salary Gap"] < 500
+
+scatterplot(
+    df[mask], 
+    x_axis="Salary Gap", 
+    y_axis="ESG Score", 
+    title="ESG Score as a function of Salary Gap",
+    hue=None
+)
+```
+
+Let's have a look at a scatterplot for an environmental indicator: 
+
+```python
+scatterplot(
+    df, 
+    x_axis="CO2 Equivalent Emissions Indirect, Scope 2", 
+    y_axis="ESG Score", 
+    title="ESG Score as a function of Scope 2 Carbon Emissions",
+    hue=None
+)
+```
+
+We can assume that the best-in-class notation makes CO2 emissions a rather bad overall predictor, as it is mostly linked to the industry. 
+
+```python
 mask = importances.importances > threshold
 X_rf = cluster_df.loc[:,importances[mask].features]
 X_rf_target = X_rf.copy()
@@ -604,6 +682,7 @@ We plot correlations for X_rf including the target variable, our ESG Score.
 ```python
 corrplot(
     X_rf_target, 
+    filename = "corrplot_random_forest.png",
     vmax=1, 
     title="Correlation matrix for Random Forest selected features"
 )
@@ -665,6 +744,14 @@ Our dimensionality reduction process pushes us to retain the 18 features from th
 X = np.array(X_rf)
 ```
 
+```python
+# normaliser ! 
+```
+
+```python
+X.head()
+```
+
 #### K-means
 
 
@@ -713,11 +800,16 @@ prep_df["kmean_labels"] = optimal_kmeans.labels_
 X_rf["kmean_labels"] = optimal_kmeans.labels_
 ```
 
+```python
+X_rf["kmean_labels"].value_counts()
+```
+
 Now, let's plot our datapoints for each kmeans label.
 
 ```python
+mask = prep_df["kmean_labels"] != 1
 scatterplot(
-    df=prep_df, 
+    df=prep_df[mask], 
     x_axis="KPCA_1", 
     y_axis="KPCA_2", 
     hue="kmean_labels", 
@@ -742,7 +834,7 @@ for k in range(lower, upper):
 
 ```python
 plt.style.use("fivethirtyeight")
-plt.figsize((10,8))
+#plt.figsize((10,8))
 plt.plot(range(lower+1, upper+1), sse)
 plt.xticks(range(lower+1, upper+1))
 plt.xlabel("Number of Clusters")
@@ -752,7 +844,7 @@ plt.show()
 ```
 
 ```python
-optimal_nb = 8
+optimal_nb = 7
 ```
 
 ```python
@@ -769,6 +861,10 @@ X_rf["mkmean_labels"] = optimal_mkmeans.labels_
 ```
 
 ```python
+X_rf["mkmean_labels"].value_counts()
+```
+
+```python
 scatterplot(
     prep_df, 
     "KPCA_1", 
@@ -776,6 +872,10 @@ scatterplot(
     "mkmean_labels", 
     "KPCA coloured by Mini-kmeans"
 )
+```
+
+```python
+
 ```
 
 #### Affinity propagation
@@ -795,6 +895,10 @@ yhat = aff_model.predict(X)
 ```python
 prep_df["aff_labels"] = aff_model.labels_
 X_rf["aff_labels"] = aff_model.labels_
+```
+
+```python
+X_rf["aff_labels"].value_counts()
 ```
 
 ```python
@@ -825,6 +929,10 @@ X_rf["agg_labels"] = agg_model.labels_
 ```
 
 ```python
+X_rf["agg_labels"].value_counts()
+```
+
+```python
 scatterplot(
     prep_df, 
     "KPCA_1", 
@@ -841,12 +949,11 @@ Constructing a tree structure from which cluster centroids are extracted.
 
 ```python
 threshold = 0.01
-n_clusters = optimal_nb
 ```
 
 ```python
 # define the model
-birch_model = Birch(threshold=threshold, n_clusters=n_clusters)
+birch_model = Birch(threshold=threshold, n_clusters=optimal_nb)
 # fit the model
 birch_model.fit(X)
 # assign a cluster to each example
@@ -856,6 +963,10 @@ yhat = birch_model.predict(X)
 ```python
 prep_df["birch_labels"] = birch_model.labels_
 X_rf["birch_labels"] = birch_model.labels_
+```
+
+```python
+X_rf["birch_labels"].value_counts()
 ```
 
 ```python
@@ -875,7 +986,7 @@ Used to find clusters of arbitrary shape.
 
 ```python
 eps = 0.30
-min_samples = 9
+min_samples = 10#X_rf.shape[0]/10
 ```
 
 ```python
@@ -888,6 +999,10 @@ yhat = db_model.fit_predict(X)
 ```python
 prep_df["dbscan_labels"] = db_model.labels_
 X_rf["dbscan_labels"] = db_model.labels_
+```
+
+```python
+X_rf["dbscan_labels"].value_counts()
 ```
 
 ```python
@@ -915,6 +1030,10 @@ yhat = mshift_model.fit_predict(X)
 ```python
 prep_df["mshift_labels"] = mshift_model.labels_
 X_rf["mshift_labels"] = mshift_model.labels_
+```
+
+```python
+X_rf["mshift_labels"].value_counts()
 ```
 
 ```python
@@ -1122,6 +1241,10 @@ y = targets.loc[:,"ESG Score"]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
 ```
 
+```python
+X_train.dtypes[X_train.dtypes == str]
+```
+
 Select relevant features:
 
 ```python
@@ -1256,4 +1379,8 @@ scatterplot(
 #ax[0].legend(['excellent','bad'],loc='best',fontsize=8)
 #plt.tight_layout()# let's make good plots
 #plt.show()
+```
+
+```python
+
 ```
