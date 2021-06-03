@@ -52,65 +52,26 @@ from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
 ```
 
-# Data exploration
-
-
-We exclude ESG notations by Refinitiv from our data exploration, as we will use them only later for verification purposes.  
-Note that Refinitiv adopts a **best-in-class** methodology, meaning that our clusters may not correspond to theirs as we run our analysis for all fields together. 
-
-
 First, download your data.
 
 ```python
 input_path = "../inputs/"
 input_filename = "universe_df_esg.csv"
 output_path = "../outputs/"
-```
-
-```python
 initial_df = pd.read_csv(input_path+input_filename).drop(columns=["Unnamed: 0"])
-print(initial_df.shape)
-initial_df.head()
+df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
+df["ESG Score"] = initial_df["ESG Score"]
+df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
+df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
+df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
+df["ESG Score Grade"] = initial_df["ESG Score Grade"]
+df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
+df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
+df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
+prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
 ```
 
-#### a) SFDR metrics
-
-
-Here you will find the list of all SFDR metrics we subselected to make our choice:
-
 ```python
-sfdr_metrics = {
-    'TR.GICSSector': 'GIC_Sector',
-    'TR.NACEClassification': 'NACE_Sector',
-    'TR.CO2EmissionTotal': "GHG Emissions",
-    'TR.CO2DirectScope1': "GHG Emissions",
-    'TR.CO2IndirectScope2': "GHG Emissions",
-    'TR.CO2IndirectScope3': "GHG Emissions",
-    'carbon_footprint': "GHG Emissions",
-    'TR.AnalyticCO2': "GHG Emissions",
-    'TR.AnalyticTotalRenewableEnergy':"Energy Efficiency",
-    'TR.AnalyticEnergyUse':'Energy Efficiency', # globally and by NACE sector, GJ/M$
-    'TR.BiodiversityImpactReduction':"Biodiversity", # does the company monitor its impact
-    'TR.AnalyticDischargeWaterSystem':"Water", # ton emissions / $M
-    'TR.HazardousWaste': "Waste",
-    'TR.WasteTotal':'Waste', # to get non recycled waste
-    'TR.WasteRecycledTotal':'Waste', 
-    'TR.ILOFundamentalHumanRights': 'Social and Employee Matters',
-    'TR.GenderPayGapPercentage':'Social and Employee Matters', # women to men
-    'TR.AnalyticSalaryGap':'Social and Employee Matters', # to average, should be median
-    'TR.AnalyticBoardFemale': 'Social and Employee Matters', 
-    'TR.WhistleBlowerProtection': 'Social and Employee Matters',
-    'TR.AccidentsTotal': 'Social and Employee Matters', # proxy for accidents
-    'TR.AnalyticHumanRightsPolicy': 'Social and Employee Matters',
-    'TR.CriticalCountry1': 'Social and Employee Matters', # as a proxy for operations at risk of child or forced labour
-    'TR.CriticalCountry2': 'Social and Employee Matters', # as a proxy for operations at risk of child or forced labour
-    'TR.CriticalCountry3': 'Social and Employee Matters', # as a proxy for operations at risk of child or forced labour
-    'TR.CriticalCountry4': 'Social and Employee Matters', # as a proxy for operations at risk of child or forced labour
-    'TR.AntiPersonnelLandmines':'Social and Employee Matters', # anti personnel landmines
-    'TR.PolicyBriberyCorruption': 'Anti-corruption and Anti-bribery',
-    'TR.AnalyticBriberyFraudControv':'Anti-corruption and Anti-bribery',
-}
-
 # And the mapping of each metric to a pillar
 pillar_mapping = {
     # Environmental
@@ -171,288 +132,132 @@ pillar_mapping = {
 }
 ```
 
-To comply with SFDR requirements, we are missing data on:  
-- Biodiversity. Red List species / adjacent to sites. 
-- Deforestation
-- Water stress, untreated discharged waste water
-- Due diligence on human rights, human trafficking  
-- Number of convictions for anti-corruption
-
-
-Before we deep-dive into the data, let's study our metric pillar distribution: 
+# Basic Clustering
 
 ```python
-data = [pillar_mapping[key] for key in list(initial_df.columns)]
-data = list(filter(lambda a: a != "Other", data))
-data = list(filter(lambda a: a != "Target", data))
-sns.countplot(data, order = dict(Counter(data).most_common()).keys())
-plt.title("SFDR Metrics, Count by pillar")
-plt.savefig('images/sfdr_distribution.png')
-plt.show()
-for key in dict(Counter(data)).keys():
-    print(f"{key}: {dict(Counter(data))[key]/sum(list(Counter(data).values()))*100:.1f} percent")
+# Utils
 
+# Utils
+
+def plot_pca(pca, percent=False, cumsum=False):
+    ticks = list(range(pca.n_components))[::10]
+    labels = [x for x in ticks]
+    if percent == True: 
+        if cumsum == True:
+            figure(figsize=(10,4))
+            plt.plot(np.cumsum(pca.explained_variance_ratio_))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/PCA_feature_selection_cumsum_percent.png")  
+            plt.show()
+        else:
+            figure(figsize=(10,4))
+            plt.plot(pca.explained_variance_ratio_)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, explained variance in %")
+            plt.savefig("images/PCA_feature_selection_percent.png")  
+            plt.show()
+    else:
+        if cumsum == True:
+            figure(figsize=(10,4))
+            plt.plot(np.cumsum(pca.explained_variance_))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/PCA_feature_selection_cumsum.png")  
+            plt.show()
+        else:
+            figure(figsize=(10,4))
+            plt.plot(pca.explained_variance_,)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection")
+            plt.savefig("images/PCA_feature_selection.png")
+            plt.show()
+
+            
+def plot_kpca(kpca, percent=False, cumsum=False):
+    ticks = list(range(kpca.n_components))[::10]
+    labels = [x for x in ticks]
+    explained_variance = np.var(full_kpca_features, axis=0)
+    explained_variance_ratio = explained_variance / np.sum(explained_variance)
+    if percent == True: 
+        if cumsum == True:
+            figure(figsize=(10,4))
+            plt.plot(np.cumsum(explained_variance_ratio))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_cumsum_percent.png")  
+            plt.show()
+        else:
+            figure(figsize=(10,4))
+            plt.plot(explained_variance_ratio)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_percent.png")  
+            plt.show()
+    else:
+        if cumsum == True:
+            figure(figsize=(10,4))
+            plt.plot(np.cumsum(explained_variance))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_cumsum.png")  
+            plt.show()
+        else:
+            figure(figsize=(10,4))
+            plt.plot(explained_variance,)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection")
+            plt.savefig("images/KPCA_feature_selection.png")
+            plt.show()
+        
+def kmeans(X, kmeans_kwargs, upper=10, plot = True):
+    """
+    Run the kmeans algorithm for various numbers of clusters. 
+    Plot the elbow graph to find the optimal k. 
+    X: normalised features to perform clustering on. 
+    kmeans_kwargs: dictionary containing your kmeans arguments. 
+    upper: the maximal number of clusters to test. 
+    plot: boolean indicating whether to plot the elbow graph. 
+    
+    :returns: the sse as a list. 
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    lower=1
+    for k in range(lower, upper):
+        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+        kmeans.fit(X)
+        sse.append(kmeans.inertia_)
+    if plot == True: 
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15,5))
+        plt.plot(range(lower+1, upper+1), sse)
+        plt.xticks(range(lower+1, upper+1), rotation=45)
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for KMeans")
+        plt.savefig('images/elbow_graph_kmeans.png')
+        plt.show()
+    return sse
 ```
 
-Most metrics we tracked are Environmental. They represent 50% of all features. Social comes second with ~30% of all metrics, followed by Governance. 
-We remove ESG notations and scores from our dataframe for our data exploration. 
-
-```python
-# Simply remove ESG notations for our analysis
-df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
-pp = pprint.PrettyPrinter(indent=4)
-pp.pprint(list(df.columns))
-print(f"Our dataframe presents {df.shape[1]-6} SFDR-related metrics.")
-```
-
-#### Geographic repartition. 
-
-
-Let's observe the geographic repartition of our dataset.
-
-```python
-countplot(df,"Country", filename="country_distribution.png")
-```
-
-The USA is over-represented in our dataset, and we only work on Western companies.  
-Consider that for data processing purposes, when retrieving Thompson-Reuters data, we kept the first occurrence of a company, often labelled as USA. This means that companies under the "USA" flag occurred in our initial dataset in other geographical locations. 
-
-
-#### Field repartition. 
-
-```python
-countplot(df,"GICS Sector Name", filename="sector_distribution.png", figsize=(8,8))
-```
-
-Here we see Industrials over-represented in our dataset along with Financials.
-
-
-#### Market Capitalization
-
-```python
-columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df, columns,  filename="market_cap_sector.png", categorical=False, figsize=(6,6))
-```
-
-```python
-upper = 100
-mask = df["Market Capitalization (bil) [USD]"] < upper
-columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df[mask], columns,  filename="market_cap_100_sector.png", categorical=False, figsize=(6,6))
-```
-
-#### Boxplots by variable / field
-
-```python
-countplot(df,"Whistleblower Protection", filename="whistleblower.png", figsize=(6,6))
-```
-
-```python
-columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns,  filename="board_gender_div_sector.png", categorical=False, figsize=(6,6))
-```
-
-```python
-columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
-boxplot(df, columns, filename="CO2_equivalent_total_sector.png", categorical=True, figsize=(10,6))
-```
-
-Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
-
-```python
-columns = ["GICS Sector Name","Board Gender Diversity, Percent"]
-boxplot(df, columns, filename="board_gender_diversity_sector.png", categorical=True)
-```
-
-```python
-columns = ["GICS Sector Name","CO2 Equivalent Emissions Indirect, Scope 2"]
-boxplot(df, columns, filename="CO2_emissions_scope2_sector.png", categorical=True)
-```
-
-```python
-columns = ["GICS Sector Name","CO2 Equivalent Emissions Indirect, Scope 3"]
-boxplot(df, columns, filename="CO2_emissions_scope3_sector.png",categorical=True)
-```
-
-#### Correlation matrix SFDR - ESG Scoring.
-
-```python
-corrplot(df, filename="correlation_matrix.png", vmax=1, title="Correlation matrix for SFDR metrics")
-```
-
-#### ESG Scoring study 
-
-```python
-columns = ["GICS Sector Name", "ESG Score"]
-boxplot(initial_df, columns, filename="ESG_score_sector.png", categorical=True)
-```
-
-### Data preprocessing
-
-```python
-initial_df = pd.read_csv(input_path+input_filename).drop(columns=["Unnamed: 0"])
-df = initial_df.loc[:,"Name":"Bribery, Corruption and Fraud Controversies"].copy()
-```
-
-```python
-# Add columns to full df
-# Letters
-#prep_df["ESG Score Grade"] = initial_df.loc[:,"ESG Score Grade"]
-#prep_df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
-#prep_df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
-#prep_df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
-```
-
-```python
-df["ESG Score"] = initial_df["ESG Score"]
-df['Environmental Pillar Score'] = initial_df.loc[:,"Environmental Pillar Score"]
-df['Social Pillar Score'] = initial_df.loc[:,"Social Pillar Score"]
-df['Governance Pillar Score'] = initial_df.loc[:,"Governance Pillar Score"]
-df["ESG Score Grade"] = initial_df["ESG Score Grade"]
-df['Environmental Pillar Score Grade'] = initial_df.loc[:,"Environmental Pillar Score Grade"]
-df['Social Pillar Score Grade'] = initial_df.loc[:,"Social Pillar Score Grade"]
-df['Governance Pillar Score Grade'] = initial_df.loc[:,"Governance Pillar Score Grade"]
-```
-
-```python
-(df.isna().sum().sort_values()/len(df))*100
-```
-
-```python
-df.shape
-```
-
-We first note that some metrics, although they are required by SFDR, suffer from particularly low coverage! This confirms observations by industry experts throughout our qualitative interviews.  
-For instance, carbon emissions total stands at approximately 50% missing datapoints, and water pollutant emissions to revenues information is practically unavaiable at 99% missing datapoints.
-
-
-Depending on the missing value strategy you want to put in place by column, change column names here:
-
-```python
-sectors = list(df["GICS Sector Name"].value_counts().index)
-
-# Set value to median sector value. 
-median_strategy_cols = [
-    "Board Gender Diversity, Percent",
-    "CO2 Equivalent Emissions Total",
-    "Total CO2 Equivalent Emissions To Revenues USD in million",
-    "CO2 Equivalent Emissions Direct, Scope 1",
-    "CO2 Equivalent Emissions Indirect, Scope 2",
-    "Total Energy Use To Revenues USD in million",
-    "Salary Gap",
-    "Waste Total",
-    "CO2 Equivalent Emissions Indirect, Scope 3",
-    "Waste Recycled Total",
-    "Accidents Total",
-    "Total Renewable Energy To Energy Use in million",
-    "Hazardous Waste",
-    "ESG Score",
-    "Environmental Pillar Score",
-    "Social Pillar Score",
-    "Governance Pillar Score"
-]
-
-# Assuming there is no policy in place, value set to zero. 
-conservative_cols = [
-    "Anti-Personnel Landmines",
-    "Fundamental Human Rights ILO UN",
-    "Biodiversity Impact Reduction",
-    "Human Rights Policy",
-    "Whistleblower Protection",
-    "Bribery, Corruption and Fraud Controversies",
-]
-
-# Drop these columns. 
-drop_cols = [
-    "Water Pollutant Emissions To Revenues USD in million",
-    "NACE Classification"
-]
-```
-
-```python
-df_fillna = fillna(df, sectors, median_strategy_cols, conservative_cols, drop_cols)
-```
-
-```python
-df_fillna.head()
-```
-
-We now check that we have few missing values: 
-
-```python
-df_fillna.isna().sum()
-```
-
-We can now safely drop rows with missing values.
-
-```python
-df_fillna = df_fillna.dropna()
-```
-
-```python
-print(f"We are left with data for {df_fillna.shape[0]} companies.")
-```
-
-```python
-#df_fillna.to_csv("../inputs/universe_df_no_nans.csv", index=False)
-df_fillna_msci = pd.read_csv("../inputs/universe_df_msci_added.csv")
-```
-
-```python
-pp.pprint(list(df_fillna.columns))
-```
-
-Then, define the columns to encode using a OneHotEncoder. 
-
-```python
-categorical_cols = [
-   # "Instrument",to keep trace
-    "Country",
-    "GICS Sector Name",
-    #"Industry Name - GICS Sub-Industry",
-   # "NACE Classification",
-   # "Biodiversity Impact Reduction",
-   # "Fundamental Human Rights ILO UN",
-   # "Whistleblower Protection",
-   # "Human Rights Policy",
-    "Critical Country 1",
-    "Critical Country 2",
-    "Critical Country 3",
-    "Critical Country 4",
-   # "Anti-Personnel Landmines",
-   # "Bribery, Corruption and Fraud Controversies"
-]
-```
-
-Let's try removing the sub-industry column to reduce data dimensionality:
-
-```python
-df_fillna = df_fillna.drop(columns=["Industry Name - GICS Sub-Industry"])
-```
-
-```python
-df_encoded = one_hot_encode(df_fillna, categorical_cols)
-df_encoded_msci = one_hot_encode(df_fillna_msci, categorical_cols)
-```
-
-```python
-df_encoded.head()
-```
-
-```python
-df_encoded.to_csv("../inputs/universe_df_encoded.csv", index=False)
-df_encoded_msci.to_csv("../inputs/universe_df_encoded_msci.csv", index=False)
-```
-
-### Basic clustering without msci data.
-
-```python
-prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
-print(prep_df.shape)
-prep_df.head()
-```
-
-### Dimensionality reduction techniques
+## Dimensionality reduction techniques
 
 
 Note that PCA works for data that is linearly separable. Given the complexity of our data, this may well not be the case as we will explore here.  
@@ -463,7 +268,7 @@ drop_cols = [
     "Name",
     "Symbol",
     "Country",
-    "Industry Name - GICS Sub-Industry",
+ #   "Industry Name - GICS Sub-Industry",
     "SEDOL",
     "ISINS",
     "GICS Sector Name",
@@ -497,34 +302,24 @@ method = "cumsum"
 ```
 
 ```python
-full_pca_features, pca, selected_features = pca_selection(cluster_df, threshold=threshold, method=method)
+full_pca_features, pca, selected_features = pca_selection(
+    cluster_df, 
+    n_components=cluster_df.shape[1], 
+    threshold=threshold, 
+    method=method
+)
 print(f"We selected {selected_features.shape[1]} out of {full_pca_features.shape[1]} features for the {method} method with a threshold of {threshold} .")
 ```
 
 ```python
-ticks = list(range(pca.n_components))[::10]
-labels = [x for x in ticks]
-
-figure(figsize=(10,4))
-plt.plot(pca.explained_variance_,)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("PCA feature selection")
-plt.savefig("images/PCA_feature_selection.png")
-plt.show()
+plot_pca(pca,percent=False, cumsum=False)
 ```
 
 ```python
-figure(figsize=(10,4))
-plt.plot(pca.explained_variance_ratio_)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance %")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("PCA feature selection, explained variance in %")
-plt.savefig("images/PCA_feature_selection_percent.png")
-plt.show()
+plot_pca(pca,percent=True, cumsum=True)
 ```
+
+We can check visually that there is no jump in explained variance, meaning that our PCA isn't very useful in reducing data dimension given its complexity. 
 
 ```python
 prep_df["PCA_1"] = pd.Series(full_pca_features[:,0])
@@ -546,7 +341,7 @@ Applying a kernel to make the data linearly separable by PCA.
 
 ```python
 threshold = 0.8
-n_components = 200
+n_components = cluster_df.shape[1]
 kernel = "rbf"
 method = "cumsum"
 ```
@@ -557,29 +352,14 @@ print(f"We selected {selected_kpca_features.shape[1]} out of {full_kpca_features
 ```
 
 ```python
-ticks = list(range(kpca.n_components))[::10]
-labels = [x for x in ticks]
-explained_variance = np.var(full_kpca_features, axis=0)
-explained_variance_ratio = explained_variance / np.sum(explained_variance)
-
-figure(figsize=(10,4))
-plt.plot(explained_variance,)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("Kernel PCA feature selection")
-plt.show()
+plot_kpca(kpca, percent=False, cumsum=False)
 ```
 
 ```python
-figure(figsize=(10,4))
-plt.plot(explained_variance_ratio)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance %")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("Kernel PCA feature selection")
-plt.show()
+plot_kpca(kpca, percent=True, cumsum=True)
 ```
+
+In this graph, we see that KPCA is more successful at reducing data dimensionality, although we are not in an ideal setting. 
 
 ```python
 plt.scatter(x=full_kpca_features[:,0], y=full_kpca_features[:,1])
@@ -756,39 +536,6 @@ scatterplot(
 
 ### Clustering
 
-```python
-# Utils
-
-def kmeans(X, kmeans_kwargs, upper=10, plot = True):
-    """
-    Run the kmeans algorithm for various numbers of clusters. 
-    Plot the elbow graph to find the optimal k. 
-    X: normalised features to perform clustering on. 
-    kmeans_kwargs: dictionary containing your kmeans arguments. 
-    upper: the maximal number of clusters to test. 
-    plot: boolean indicating whether to plot the elbow graph. 
-    
-    :returns: the sse as a list. 
-    """
-    # A list holds the SSE values for each k
-    sse = []
-    for k in range(1, upper):
-        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-        kmeans.fit(X)
-        sse.append(kmeans.inertia_)
-    if plot == True: 
-        plt.style.use("fivethirtyeight")
-        plt.figure(figsize=(15,5))
-        plt.plot(range(lower+1, upper+1), sse)
-        plt.xticks(range(lower+1, upper+1), rotation=45)
-        plt.xlabel("Number of Clusters")
-        plt.ylabel("SSE")
-        plt.title("Elbow graph for KMeans")
-        plt.savefig('images/elbow_graph.png')
-        plt.show()
-    return sse
-
-```
 
 As such, cluster analysis is an iterative process where subjective evaluation of the identified clusters is fed back into changes to algorithm configuration until a desired or appropriate result is achieved.
 
@@ -817,7 +564,7 @@ kmeans_kwargs = {
 ```
 
 ```python
-sse = kmeans(X, kmeans_kwargs, upper=60, plot=True)
+sse = kmeans(X, kmeans_kwargs, upper=50, plot=True)
 ```
 
 Based on this elbow graph, we select 30 as the optimal number of clusters.
@@ -879,34 +626,49 @@ catplot(df, columns, figsize=(11,0.5))
 #### Mini-batch Kmeans
 
 ```python
-# define the model
-sse = []
-for k in range(lower, upper):
-    model = MiniBatchKMeans(n_clusters=k)
-    model.fit(X)
-    sse.append(model.inertia_)
+def m_kmeans(X, upper=10, plot = True):
+    """
+    Run the kmeans algorithm for various numbers of clusters. 
+    Plot the elbow graph to find the optimal k. 
+    X: normalised features to perform clustering on. 
+    kmeans_kwargs: dictionary containing your kmeans arguments. 
+    upper: the maximal number of clusters to test. 
+    plot: boolean indicating whether to plot the elbow graph. 
+    
+    :returns: the sse as a list. 
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    lower=1
+    for k in range(lower, upper):
+        model = MiniBatchKMeans(n_clusters=k)
+        model.fit(X)
+        sse.append(model.inertia_)
+    if plot == True: 
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15,5))
+        plt.plot(range(lower+1, upper+1), sse)
+        plt.xticks(range(lower+1, upper+1))
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for Mini-batch KMeans")
+        plt.show()
+        plt.savefig('images/elbow_graph_mkmeans.png')
+        plt.show()
+    return sse
 ```
 
 ```python
-plt.style.use("fivethirtyeight")
-#plt.figsize((10,8))
-plt.plot(range(lower+1, upper+1), sse)
-plt.xticks(range(lower+1, upper+1))
-plt.xlabel("Number of Clusters")
-plt.ylabel("SSE")
-plt.title("Elbow graph for Mini-batch KMeans")
-plt.show()
+sse = m_kmeans(X, upper=50, plot=True)
 ```
 
 ```python
-optimal_nb = 7
+optimal_nb = 20
 ```
 
 ```python
 optimal_mkmeans = MiniBatchKMeans(n_clusters=optimal_nb)
-# fit the model
 optimal_mkmeans.fit(X)
-# assign a cluster to each example
 yhat = optimal_mkmeans.predict(X)
 ```
 

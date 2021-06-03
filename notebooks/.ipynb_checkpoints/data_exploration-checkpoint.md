@@ -230,10 +230,6 @@ Here we see Industrials over-represented in our dataset along with Financials.
 #### Market Capitalization
 
 ```python
-
-```
-
-```python
 columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
 boxplot(df, columns,  filename="market_cap_sector.png", categorical=False, figsize=(6,6))
 ```
@@ -413,7 +409,7 @@ categorical_cols = [
    # "Instrument",to keep trace
     "Country",
     "GICS Sector Name",
-    "Industry Name - GICS Sub-Industry",
+    #"Industry Name - GICS Sub-Industry",
    # "NACE Classification",
    # "Biodiversity Impact Reduction",
    # "Fundamental Human Rights ILO UN",
@@ -426,6 +422,12 @@ categorical_cols = [
    # "Anti-Personnel Landmines",
    # "Bribery, Corruption and Fraud Controversies"
 ]
+```
+
+Let's try removing the sub-industry column to reduce data dimensionality:
+
+```python
+df_fillna = df_fillna.drop(columns=["Industry Name - GICS Sub-Industry"])
 ```
 
 ```python
@@ -536,6 +538,7 @@ scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by s
 
 ```python
 X_pca = selected_features
+pd.DataFrame(X_pca).to_csv("../inputs/X_pca.csv", index=False)
 ```
 
 ### Kernel PCA 
@@ -591,6 +594,7 @@ prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
 
 ```python
 X_kpca = selected_kpca_features
+pd.DataFrame(X_kpca).to_csv("../inputs/X_kpca.csv", index=False)
 ```
 
 ### Random Forest
@@ -691,6 +695,7 @@ We can assume that the best-in-class notation makes CO2 emissions a rather bad o
 ```python
 mask = importances.importances > threshold
 X_rf = cluster_df.loc[:,importances[mask].features]
+pd.DataFrame(X_rf).to_csv("../inputs/X_rf.csv", index=False)
 X_rf_target = X_rf.copy()
 X_rf_target["ESG Score"] = prep_df["ESG Score"].copy()
 X_rf_target.head()
@@ -751,6 +756,39 @@ scatterplot(
 
 ### Clustering
 
+```python
+# Utils
+
+def kmeans(X, kmeans_kwargs, upper=10, plot = True):
+    """
+    Run the kmeans algorithm for various numbers of clusters. 
+    Plot the elbow graph to find the optimal k. 
+    X: normalised features to perform clustering on. 
+    kmeans_kwargs: dictionary containing your kmeans arguments. 
+    upper: the maximal number of clusters to test. 
+    plot: boolean indicating whether to plot the elbow graph. 
+    
+    :returns: the sse as a list. 
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    for k in range(1, upper):
+        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+        kmeans.fit(X)
+        sse.append(kmeans.inertia_)
+    if plot == True: 
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15,5))
+        plt.plot(range(lower+1, upper+1), sse)
+        plt.xticks(range(lower+1, upper+1), rotation=45)
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for KMeans")
+        plt.savefig('images/elbow_graph.png')
+        plt.show()
+    return sse
+
+```
 
 As such, cluster analysis is an iterative process where subjective evaluation of the identified clusters is fed back into changes to algorithm configuration until a desired or appropriate result is achieved.
 
@@ -758,14 +796,10 @@ As such, cluster analysis is an iterative process where subjective evaluation of
 Our dimensionality reduction process pushes us to retain the 18 features from the Random Forest Algorithm.
 
 ```python
-#X = X_pca
-#X = X_kpca
+#X = np.array(pd.read_csv("../inputs/X_pca.csv"))
+#X = np.array(pd.read_csv("../inputs/X_kpca.csv"))
 scaler = StandardScaler()
-X = scaler.fit_transform(np.array(X_rf))
-```
-
-```python
-X.head()
+X = scaler.fit_transform(np.array(pd.read_csv("../inputs/X_rf.csv")))
 ```
 
 #### K-means
@@ -780,30 +814,16 @@ kmeans_kwargs = {
     "max_iter": 300,
     "random_state": 42,
 }
-
-lower, upper = 1, 10
-# A list holds the SSE values for each k
-sse = []
-for k in range(lower, upper):
-    kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-    kmeans.fit(X)
-    sse.append(kmeans.inertia_)
 ```
 
 ```python
-plt.style.use("fivethirtyeight")
-plt.plot(range(lower+1, upper+1), sse)
-plt.xticks(range(lower+1, upper+1))
-plt.xlabel("Number of Clusters")
-plt.ylabel("SSE")
-plt.title("Elbow graph for KMeans")
-plt.show()
+sse = kmeans(X, kmeans_kwargs, upper=60, plot=True)
 ```
 
-Based on this elbow graph, we select 4 as the optimal number of clusters.
+Based on this elbow graph, we select 30 as the optimal number of clusters.
 
 ```python
-optimal_nb = 5
+optimal_nb = 20
 ```
 
 ```python
@@ -820,21 +840,40 @@ X_rf["kmean_labels"] = optimal_kmeans.labels_
 X_rf["kmean_labels"].value_counts()
 ```
 
-Now, let's plot our datapoints for each kmeans label.
+To run our data exploration, we perform it on the initial dataframe. 
 
 ```python
-mask = prep_df["kmean_labels"] != 1
-scatterplot(
-    df=prep_df[mask], 
-    x_axis="KPCA_1", 
-    y_axis="KPCA_2", 
-    hue="kmean_labels", 
-    title="KPCA coloured by Kmeans"
-)
+df.shape
 ```
 
 ```python
-X_rf.columns
+df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"])
+df.loc[:,"kmean_labels"] = X_rf.loc[:,"kmean_labels"]
+```
+
+```python
+columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
+catplot(df, columns, figsize=(11,0.5))
+```
+
+```python
+columns = ["kmean_labels","Board Gender Diversity, Percent"]
+boxplot(df, columns, filename="gender_div_kmeans.png", categorical=True, figsize=(10,6))
+```
+
+```python
+columns = ["kmean_labels","Total CO2 Equivalent Emissions To Revenues USD in million"]
+boxplot(df, columns, filename="co2_emissions_kmeans.png", categorical=True, figsize=(10,6))
+```
+
+```python
+columns = ["ESG Score Grade", "kmean_labels", "GICS Sector Name"]
+catplot(df, columns, figsize=(11,0.5))
+```
+
+```python
+columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
+catplot(df, columns, figsize=(11,0.5))
 ```
 
 #### Mini-batch Kmeans
@@ -888,10 +927,6 @@ scatterplot(
     "mkmean_labels", 
     "KPCA coloured by Mini-kmeans"
 )
-```
-
-```python
-
 ```
 
 #### Affinity propagation
