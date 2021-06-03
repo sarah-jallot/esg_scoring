@@ -255,6 +255,37 @@ def kmeans(X, kmeans_kwargs, upper=10, plot = True):
         plt.savefig('images/elbow_graph_kmeans.png')
         plt.show()
     return sse
+
+def m_kmeans(X, upper=10, plot = True):
+    """
+    Run the kmeans algorithm for various numbers of clusters. 
+    Plot the elbow graph to find the optimal k. 
+    X: normalised features to perform clustering on. 
+    kmeans_kwargs: dictionary containing your kmeans arguments. 
+    upper: the maximal number of clusters to test. 
+    plot: boolean indicating whether to plot the elbow graph. 
+    
+    :returns: the sse as a list. 
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    lower=1
+    for k in range(lower, upper):
+        model = MiniBatchKMeans(n_clusters=k)
+        model.fit(X)
+        sse.append(model.inertia_)
+    if plot == True: 
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15,5))
+        plt.plot(range(lower+1, upper+1), sse)
+        plt.xticks(range(lower+1, upper+1))
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for Mini-batch KMeans")
+        plt.show()
+        plt.savefig('images/elbow_graph_mkmeans.png')
+        plt.show()
+    return sse
 ```
 
 ## Dimensionality reduction techniques
@@ -352,6 +383,11 @@ print(f"We selected {selected_kpca_features.shape[1]} out of {full_kpca_features
 ```
 
 ```python
+prep_df["KPCA_1"] = pd.Series(full_kpca_features[:,0])
+prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
+```
+
+```python
 plot_kpca(kpca, percent=False, cumsum=False)
 ```
 
@@ -368,8 +404,7 @@ plt.show()
 ```
 
 ```python
-prep_df["KPCA_1"] = pd.Series(full_kpca_features[:,0])
-prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
+scatterplot(prep_df, x_axis="KPCA_1", y_axis="KPCA_2", title="KPCA scatterplot by sector", hue="GICS Sector Name")
 ```
 
 ```python
@@ -590,73 +625,15 @@ X_rf["kmean_labels"].value_counts()
 To run our data exploration, we perform it on the initial dataframe. 
 
 ```python
-df.shape
-```
-
-```python
 df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"])
 df.loc[:,"kmean_labels"] = X_rf.loc[:,"kmean_labels"]
 ```
 
 ```python
-columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
-```
 
-```python
-columns = ["kmean_labels","Board Gender Diversity, Percent"]
-boxplot(df, columns, filename="gender_div_kmeans.png", categorical=True, figsize=(10,6))
-```
-
-```python
-columns = ["kmean_labels","Total CO2 Equivalent Emissions To Revenues USD in million"]
-boxplot(df, columns, filename="co2_emissions_kmeans.png", categorical=True, figsize=(10,6))
-```
-
-```python
-columns = ["ESG Score Grade", "kmean_labels", "GICS Sector Name"]
-catplot(df, columns, figsize=(11,0.5))
-```
-
-```python
-columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
 ```
 
 #### Mini-batch Kmeans
-
-```python
-def m_kmeans(X, upper=10, plot = True):
-    """
-    Run the kmeans algorithm for various numbers of clusters. 
-    Plot the elbow graph to find the optimal k. 
-    X: normalised features to perform clustering on. 
-    kmeans_kwargs: dictionary containing your kmeans arguments. 
-    upper: the maximal number of clusters to test. 
-    plot: boolean indicating whether to plot the elbow graph. 
-    
-    :returns: the sse as a list. 
-    """
-    # A list holds the SSE values for each k
-    sse = []
-    lower=1
-    for k in range(lower, upper):
-        model = MiniBatchKMeans(n_clusters=k)
-        model.fit(X)
-        sse.append(model.inertia_)
-    if plot == True: 
-        plt.style.use("fivethirtyeight")
-        plt.figure(figsize=(15,5))
-        plt.plot(range(lower+1, upper+1), sse)
-        plt.xticks(range(lower+1, upper+1))
-        plt.xlabel("Number of Clusters")
-        plt.ylabel("SSE")
-        plt.title("Elbow graph for Mini-batch KMeans")
-        plt.show()
-        plt.savefig('images/elbow_graph_mkmeans.png')
-        plt.show()
-    return sse
-```
 
 ```python
 sse = m_kmeans(X, upper=50, plot=True)
@@ -697,8 +674,12 @@ scatterplot(
 Affinity propagation finds "exemplars," members of the input set that are representative of clusters.
 
 ```python
+damping = 0.5
+```
+
+```python
 # define the model
-aff_model = AffinityPropagation(damping=0.5)
+aff_model = AffinityPropagation(damping=damping)
 # fit the model
 aff_model.fit(X)
 # assign a cluster to each example
@@ -751,7 +732,7 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "agg_labels", 
-    "KPCA coloured by Mini-kmeans"
+    "KPCA coloured by Aggregation"
 )
 ```
 
@@ -761,7 +742,7 @@ scatterplot(
 Constructing a tree structure from which cluster centroids are extracted.
 
 ```python
-threshold = 0.01
+threshold = 0.08
 ```
 
 ```python
@@ -799,7 +780,7 @@ Used to find clusters of arbitrary shape.
 
 ```python
 eps = 0.30
-min_samples = 10#X_rf.shape[0]/10
+min_samples =10
 ```
 
 ```python
@@ -835,7 +816,7 @@ Mean shift clustering involves finding and adapting centroids based on the densi
 
 ```python
 # define the model
-mshift_model = MeanShift()
+mshift_model = MeanShift(min_bin_freq=100)
 # fit model and predict clusters
 yhat = mshift_model.fit_predict(X)
 ```
@@ -865,7 +846,12 @@ scatterplot(
 Modified version of DBSCAN. 
 
 ```python
-optics_model = OPTICS(eps=0.8, min_samples=10)
+eps = eps
+min_samples = min_samples
+```
+
+```python
+optics_model = OPTICS(eps=eps, min_samples=min_samples)
 # fit model and predict clusters
 yhat = optics_model.fit_predict(X)
 ```
@@ -873,6 +859,10 @@ yhat = optics_model.fit_predict(X)
 ```python
 prep_df["optics_labels"] = optics_model.labels_
 X_rf["optics_labels"] = optics_model.labels_
+```
+
+```python
+X_rf["optics_labels"].value_counts()
 ```
 
 ```python
@@ -888,7 +878,7 @@ scatterplot(
 #### Spectral clustering
 
 ```python
-optimal_nb = 6
+optimal_nb = 20
 ```
 
 Here, one uses the top eigenvectors of a matrix derived from the distance between points.
@@ -921,6 +911,10 @@ scatterplot(
 A Gaussian mixture model summarizes a multivariate probability density function with a mixture of Gaussian probability distributions as its name suggests.
 
 ```python
+optimal_nb = 15
+```
+
+```python
 # define the model
 gmm_model = GaussianMixture(n_components=optimal_nb)
 # fit the model
@@ -930,6 +924,10 @@ gmm_model.fit(X)
 ```python
 prep_df["gaussian_labels"] = gmm_model.predict(X)
 X_rf["gaussian_labels"] = gmm_model.predict(X)
+```
+
+```python
+X_rf["gaussian_labels"].value_counts()
 ```
 
 ```python
@@ -944,9 +942,52 @@ scatterplot(
 
 ```python
 X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
+prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
 ```
 
 ### Cluster interpretation and visualisation. 
+
+```python
+prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
+```
+
+```python
+test = pd.read_csv("../inputs/universe_df_encoded_msci.csv")
+```
+
+```python
+prep_df.shape
+```
+
+```python
+
+```
+
+```python
+prep_df = pd.read_csv("../inputs/prep_df_labelled.csv")
+prep_df.head()
+```
+
+```python
+columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
+catplot(df, columns, figsize=(11,0.5))
+
+plt.figure(figsize=(10,10))
+sns.catplot(x="kmean_labels", y="ESG Score", hue="Fundamental Human Rights ILO UN", kind="box", data=df)
+plt.show()
+
+columns = ["kmean_labels","Board Gender Diversity, Percent"]
+boxplot(df, columns, filename="gender_div_kmeans.png", categorical=True, figsize=(10,6))
+
+columns = ["kmean_labels","Total CO2 Equivalent Emissions To Revenues USD in million"]
+boxplot(df, columns, filename="co2_emissions_kmeans.png", categorical=True, figsize=(10,6))
+
+columns = ["ESG Score Grade", "kmean_labels", "GICS Sector Name"]
+catplot(df, columns, figsize=(11,0.5))
+
+columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
+catplot(df, columns, figsize=(11,0.5))
+```
 
 ```python
 continuous_name = "Board Gender Diversity, Percent"
@@ -1017,6 +1058,11 @@ L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est p
 
 
 ### ESG Scoring data exploration
+
+```python
+target = "ESG Score Grade"
+features = ""
+```
 
 ```python
 pred_df = pd.read_csv("../inputs/universe_df_encoded_msci.csv")

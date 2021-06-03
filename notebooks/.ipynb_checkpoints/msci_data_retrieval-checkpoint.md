@@ -17,19 +17,96 @@ output_path = "../outputs/"
 path_to_json = "../msci_data"
 ```
 
+```python
+sedols = list(initial_df.SEDOL)
+symbols = list(initial_df.Symbol)
+```
+
+```python
+symbol = symbols[3]
+```
+
+```python
+sedols[symbols.index(symbol)]
+```
+
+```python
+print(symbols[3])
+initial_df[initial_df.SEDOL == "BYVY8G0"]
+```
+
+```python
+def generate_jsons(symbols, sedols, js_timeout=2, output_path='../msci_data/'):
+    """
+    Gets MSCI ratings for each symbol, stored in a separate json file
+    """
+    counter = 0
+    for symbol in symbols:
+        response = ratefinder.get_esg_rating(
+            symbol=symbol,
+            js_timeout=js_timeout
+        )
+        response["symbol"] = symbol
+        reponse["sedol"] = sedols[symbols.index(symbol)]
+        with open(output_path + str(counter) + '.json', 'w') as fp:
+            json.dump(response, fp)
+        counter += 1
+
+
+def generate_msci_df(path_to_json="../msci_data"):
+    """
+    Reads all the scraped json files from MSCI ESG Research and returns a dataframe with one row per company.
+    """
+    json_files = [pos_json for pos_json in os.listdir(path_to_json) if pos_json.endswith('.json')]
+
+    jsons_data = pd.DataFrame(columns=['Symbol', 'rating_paragraph', 'MSCI_rating', 'MSCI_category', 'MSCI_history'])
+
+    for index, js in enumerate(json_files):
+        with open(os.path.join(path_to_json, js)) as json_file:
+            json_text = json.load(json_file)
+
+        symbol = json_text.get("symbol", "N/A")
+        rating_paragraph = json_text.get("rating-paragraph", None)
+
+        if json_text.get("current") == None:
+            rating = json_text.get("current", None)
+            category = json_text.get("current", None)
+        else:
+            rating = json_text["current"].get("esg_rating", None)
+            category = json_text["current"].get("esg_category", None)
+        history = json_text.get("history", None)
+        jsons_data.loc[index] = [symbol, rating_paragraph, rating, category, history]
+    return jsons_data
+
+
+def add_msci(initial_df, path_to_json="../msci_data"):
+    jsons_data = generate_msci_df(path_to_json=path_to_json)
+    print(initial_df.shape, jsons_data.shape)
+    initial_df_msci = pd.merge(initial_df, jsons_data, how="left", left_on="Symbol", right_on=["Symbol"])
+    print(initial_df_msci.shape)
+
+    clean_dicts = clean_dictionaries(initial_df_msci)
+    df = expand_history(clean_dicts)
+    out = pd.merge(
+        initial_df_msci,
+        df,
+        left_index=True,
+        right_index=True)
+
+    out.to_csv("../inputs/universe_df_msci_added.csv")
+    return out
+```
+
 First, load our dataframe without MSCI data.
 
 ```python
-pd.read_csv(input_path+input_filename)
-```
-
-```python
 initial_df = load_df(input_path, input_filename)
-symbols = initial_df.Symbol
+symbols, sedols = list(initial_df.Symbol), list(initial_df.SEDOL)
+generate_jsons(symbols, js_timeout=2, output_path='../msci_data/')
 ```
 
 ```python
-#generate_jsons(symbols, js_timeout=2, output_path='../msci_data/')
+
 ```
 
 Then, from the scraped data which we stored locally, we add the data to our universe dataframe. 
@@ -40,15 +117,39 @@ jsons_data.head()
 ```
 
 ```python
+jsons_data.shape
+```
+
+```python
 jsons_data.isna().sum()
 ```
 
 ```python
-clean_dicts = clean_dictionaries(jsons_data)
+#clean_dicts = clean_dictionaries(jsons_data)
 ```
 
 ```python
-clean_dicts.isna().sum()
+#clean_dicts.isna().sum()
+```
+
+```python
+
+```
+
+```python
+initial_df.Symbol.value_counts()
+```
+
+```python
+initial_df[initial_df.Symbol == "ROG"]
+```
+
+```python
+initial_df[initial_df.ISINS == "CA8787422044"]
+```
+
+```python
+jsons_data.Symbol.value_counts()
 ```
 
 ```python
@@ -57,5 +158,9 @@ initial_df_msci.head()
 ```
 
 ```python
-initial_df_msci.isna().sum()
+initial_df_msci[initial_df_msci.Symbol == "ROG"]
+```
+
+```python
+
 ```

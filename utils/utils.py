@@ -298,10 +298,11 @@ def load_df(input_path, input_filename):
     return initial_df
 
 
-def generate_jsons(symbols, js_timeout=2, output_path='../msci_data/'):
+def generate_jsons(symbols, sedols, js_timeout=2, output_path='../msci_data/'):
     """
     Gets MSCI ratings for each symbol, stored in a separate json file
     """
+    ratefinder = ESGRateFinder()
     counter = 0
     for symbol in symbols:
         response = ratefinder.get_esg_rating(
@@ -309,6 +310,7 @@ def generate_jsons(symbols, js_timeout=2, output_path='../msci_data/'):
             js_timeout=js_timeout
         )
         response["symbol"] = symbol
+        reponse["sedol"] = sedols[symbols.index(symbol)]
         with open(output_path + str(counter) + '.json', 'w') as fp:
             json.dump(response, fp)
         counter += 1
@@ -341,7 +343,9 @@ def generate_msci_df(path_to_json="../msci_data"):
 
 def add_msci(initial_df, path_to_json="../msci_data"):
     jsons_data = generate_msci_df(path_to_json=path_to_json)
+    print(initial_df.shape, jsons_data.shape)
     initial_df_msci = pd.merge(initial_df, jsons_data, how="left", left_on="Symbol", right_on=["Symbol"])
+    print(initial_df_msci.shape)
 
     clean_dicts = clean_dictionaries(initial_df_msci)
     df = expand_history(clean_dicts)

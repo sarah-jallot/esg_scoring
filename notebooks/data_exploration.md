@@ -399,6 +399,14 @@ df_fillna_msci = pd.read_csv("../inputs/universe_df_msci_added.csv")
 ```
 
 ```python
+df.shape
+```
+
+```python
+df_fillna_msci.isna().sum()
+```
+
+```python
 pp.pprint(list(df_fillna.columns))
 ```
 
