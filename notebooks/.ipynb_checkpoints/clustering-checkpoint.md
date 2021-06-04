@@ -26,6 +26,7 @@ from numpy import where
 import seaborn as sns
 import pprint
 from sklearn.preprocessing import OneHotEncoder
+from pprint import PrettyPrinter
 
 import sys
 sys.path.append("../utils/")
@@ -35,10 +36,12 @@ from sklearn.preprocessing import StandardScaler
 #Importing required modules
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+from sklearn.metrics import confusion_matrix, accuracy_score
+
 # Import clustering methods
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
@@ -135,8 +138,6 @@ pillar_mapping = {
 # Basic Clustering
 
 ```python
-# Utils
-
 # Utils
 
 def plot_pca(pca, percent=False, cumsum=False):
@@ -286,6 +287,35 @@ def m_kmeans(X, upper=10, plot = True):
         plt.savefig('images/elbow_graph_mkmeans.png')
         plt.show()
     return sse
+
+def simplify_categories(series):
+    return series.str.replace("+", "").str.replace("-", "")
+
+def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="kmean_labels",):
+    X_trunc = X.loc[:,"Fundamental Human Rights ILO UN":"Bribery, Corruption and Fraud Controversies"]
+    if with_labels == False:
+        X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
+    else:
+        X_labels = [X_trunc, X.loc[:,labels]]
+        X_train, X_test, y_train, y_test = train_test_split(X_labels, y, test_size=test_size, random_state=0)
+    
+    model = RandomForestClassifier(**params)
+    model.fit(X_train,y_train)
+    return model, X_train, X_test, y_train, y_test
+
+def confusion_mat_df(model, y_test, y_pred, percent=False):
+    """
+    Format the confusion matrix properly. 
+    """
+    print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
+    if percent == False: 
+        confusion_mat = confusion_matrix(y_test, y_pred)
+    else:
+        confusion_mat = confusion_matrix(y_test, y_pred)/confusion_matrix(y_test, y_pred).sum(axis=0)*100
+    confusion_mat = pd.DataFrame(confusion_mat)
+    confusion_mat.columns = model.classes_
+    confusion_mat.index = model.classes_
+    return confusion_mat
 ```
 
 ## Dimensionality reduction techniques
@@ -947,44 +977,45 @@ prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
 
 ### Cluster interpretation and visualisation. 
 
-```python
-prep_df = pd.read_csv("../inputs/universe_df_encoded.csv")
-```
+
+Let us now examine our variable within our different clusters.
 
 ```python
-test = pd.read_csv("../inputs/universe_df_encoded_msci.csv")
-```
-
-```python
-prep_df.shape
-```
-
-```python
-
-```
-
-```python
-prep_df = pd.read_csv("../inputs/prep_df_labelled.csv")
-prep_df.head()
+df = pd.read_csv("../inputs/prep_df_labelled.csv")
+df.head()
 ```
 
 ```python
 columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
 catplot(df, columns, figsize=(11,0.5))
+```
 
+```python
 plt.figure(figsize=(10,10))
 sns.catplot(x="kmean_labels", y="ESG Score", hue="Fundamental Human Rights ILO UN", kind="box", data=df)
 plt.show()
+```
 
+```python
+# count the label distribution by gics sector
+```
+
+```python
 columns = ["kmean_labels","Board Gender Diversity, Percent"]
 boxplot(df, columns, filename="gender_div_kmeans.png", categorical=True, figsize=(10,6))
+```
 
+```python
 columns = ["kmean_labels","Total CO2 Equivalent Emissions To Revenues USD in million"]
 boxplot(df, columns, filename="co2_emissions_kmeans.png", categorical=True, figsize=(10,6))
+```
 
+```python
 columns = ["ESG Score Grade", "kmean_labels", "GICS Sector Name"]
 catplot(df, columns, figsize=(11,0.5))
+```
 
+```python
 columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
 catplot(df, columns, figsize=(11,0.5))
 ```
@@ -1006,27 +1037,12 @@ clusters = "kmean_labels"
 ```
 
 ```python
-cluster_boxplot(X_rf, feature_name = continuous_name, clusters=clusters)
+cluster_boxplot(df, feature_name = continuous_name, clusters=clusters)
 ```
 
 ```python
-cluster_catplot(X_rf, feature_name =categorical_name , clusters=clusters)
+cluster_catplot(df, feature_name =categorical_name , clusters=clusters)
 ```
-
-### Bibliography:
-- [PCA Analysis with Python](https://towardsdatascience.com/dive-into-pca-principal-component-analysis-with-python-43ded13ead21)
-- [Clustering Algorithms with Python - MachineLearningMastery](https://machinelearningmastery.com/clustering-algorithms-with-python/)
-- [10 Clustering Algorithms to know - KD Nuggets](https://www.kdnuggets.com/2019/10/right-clustering-algorithm.html)
-- [The Five Clustering Algorithms Dtaa Scientists need to know - Towards Data Science](https://towardsdatascience.com/the-5-clustering-algorithms-data-scientists-need-to-know-a36d136ef68)  
-- [Solving the Data Dilemma in ESG Quant Investing - Invest Summit](https://www.youtube.com/watch?v=OA4axeZ-DmY)
-- [Shades of Green: Investor Approaches to ESG - MSCI ](https://www.msci.com/perspectives-podcast/shades-of-green-investor-approaches-esg)
-- [More Regulators Pick up the ESG Baton - KPMG](https://home.kpmg/lu/en/home/insights/2020/12/more-regulators-pick-up-the-esg-baton.html)  
-- Qualitative Interviews with over 50 Sustainable Finance experts in France and Luxemburg  
-
-- [Clustering by Passing Messages Between the datapoints](https://science.sciencemag.org/content/315/5814/972)
-- Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.  
-- [Sirus](https://hal.archives-ouvertes.fr/hal-02190689v2)
-
 
 Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
 
@@ -1057,147 +1073,68 @@ L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est p
 [Random Forest finetuning](https://towardsdatascience.com/random-forest-hyperparameters-and-how-to-fine-tune-them-17aee785ee0d)
 
 
-### ESG Scoring data exploration
+### ESG Score Classification
 
 ```python
-target = "ESG Score Grade"
-features = ""
+X = pd.read_csv(input_path+"X_rf_labelled.csv")
+y = pd.read_csv(input_path+"/universe_df_encoded.csv").loc[:,"ESG Score Grade"]
+df = pd.DataFrame(X,y)
 ```
 
 ```python
-pred_df = pd.read_csv("../inputs/universe_df_encoded_msci.csv")
-print(pred_df.shape)
-pred_df.head()
+y = simplify_categories(y)
+```
+
+```python
+params = {
+    "n_estimators":500, 
+    "max_depth":10,
+}
+```
+
+```python
+
+```
+
+```python
+model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params)
+```
+
+```python
+y_pred = model.predict(X_test)
+```
+
+```python
+print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
+print(confusion_matrix(y_test, y_pred))
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=True)
+```
+
+```python
+test = pd.DataFrame(y_test)
+test["predictions"] = y_pred
+test.columns = ["truth", "predictions"]
+test
 ```
 
 ```python
 countplot(pred_df,"ESG Score Grade", filename="ESG_score_distribution.png")
-```
-
-```python
 sns.countplot(x="MSCI_rating", hue="GICS Sector Name", data=pred_df)
 plt.figsize((10,10))
 plt.show()
-```
-
-```python
 countplot(pred_df,"MSCI_rating", filename="ESG_score_distribution.png")
-```
-
-```python
-
-```
-
-```python
 columns = ["GICS Sector Name", "ESG Score"]
 boxplot(pred_df, columns, filename="ESG_score_sector.png", categorical=True)
-```
-
-```python
 columns = ["GICS Sector Name", "MSCI_rating"]
 boxplot(pred_df, columns, filename="MSCI_ESG_score_sector.png", categorical=True)
-```
-
-Load the data: 
-
-```python
-filename = "/universe_df_encoded.csv"
-df = pd.read_csv(input_path+filename)
-df["kmean_labels"] = prep_df["kmean_labels"]
-df["Environmental Pillar Score Grade"] = prep_df["Environmental Pillar Score Grade"]
-df["Social Pillar Score Grade"] = prep_df["Social Pillar Score Grade"]
-df["Governance Pillar Score Grade"] = prep_df["Governance Pillar Score Grade"]
-```
-
-Format the data into train and test: 
-
-```python
-drop_cols = [
-    "ESG Score", 
-    "Environmental Pillar Score", 
-    "Social Pillar Score", 
-    "Governance Pillar Score", 
-    "Unnamed: 0", 
-    "Name", 
-    "Symbol", 
-    "Country", # encoded
-    "SEDOL",
-    "ISINS",
-    "GICS Sector Name", # encoded
-    "Industry Name - GICS Sub-Industry",
-    "Critical Country 1",
-    "Critical Country 2",
-    "Critical Country 3",
-    "Critical Country 4",
-]
-
-X, targets = df.drop(columns=drop_cols).copy(), df.loc[:,"ESG Score": "Governance Pillar Score"].copy()
-y = targets.loc[:,"ESG Score"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
-```
-
-```python
-X_train.dtypes[X_train.dtypes == str]
-```
-
-Select relevant features:
-
-```python
-importances, masked_importances, r2_full, r2_imp = random_forest_selection(
-    X_train, 
-    X_test, 
-    y_train, 
-    y_test, 
-    threshold=0.005
-)
-
-features = list(masked_importances.features)
-features.append("kmean_labels")
-X_train, X_test = X_train.loc[:,features],  X_test.loc[:,features]
-```
-
-Define your model:
-
-```python
-params = {
-    "n_estimators":300, 
-    "max_depth":20,
-}
-model = RandomForestRegressor(**params)
-```
-
-Fit your model:
-
-```python
-model.fit(X_train,y_train)
-```
-
-```python
-out = pd.DataFrame(y_test).reset_index()
-predictions = model.predict(X_test)
-out["predictions"] = predictions
-cheat = model.predict(X.loc[:,features])
-print(f"R2 score : {r2_score(y, cheat):.2f}")
-out
-```
-
-```python
-X["predictions"] = cheat
-X["true"] = df["ESG Score"]
-print(f"R2 score on test: {r2_score(y_test, predictions):.2f}")
-X
-```
-
-```python
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="ESG Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Environmental Pillar Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Social Pillar Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Governance Pillar Score Grade")
-```
 
-Let's check whether we accurately predicted the categories:
-
-```python
 grades_dict = {
     'A+':  'A', 
     'A':  'A', 
@@ -1217,9 +1154,7 @@ prep_df["ESG categories"] = prep_df["ESG Score Grade"].map(grades_dict)
 prep_df["Environmental categories"] = prep_df["Environmental Pillar Score Grade"].map(grades_dict)
 prep_df["Social categories"] = prep_df["Social Pillar Score Grade"].map(grades_dict)
 prep_df["Governance categories"] = prep_df["Governance Pillar Score Grade"].map(grades_dict)
-```
 
-```python
 scatterplot(
     prep_df, 
     x_axis="PCA_1", 
@@ -1227,9 +1162,7 @@ scatterplot(
     title="PCA scatterplot by ESG Category", 
     hue="ESG Categories"
 )
-```
 
-```python
 scatterplot(
     prep_df, 
     x_axis="PCA_1", 
@@ -1237,9 +1170,7 @@ scatterplot(
     title="PCA scatterplot by Environmental Category", 
     hue="Environmental Categories"
 )
-```
 
-```python
 scatterplot(
     prep_df, 
     x_axis="PCA_1", 
@@ -1247,9 +1178,6 @@ scatterplot(
     title="PCA scatterplot by Social Category", 
     hue="Social Categories"
 )
-```
-
-```python
 scatterplot(
     prep_df, 
     x_axis="PCA_1", 
@@ -1259,23 +1187,16 @@ scatterplot(
 )
 ```
 
-```python
-#fig,axes =plt.subplots(10,3, figsize=(12, 9)) # 3 columns each containing 10 figures, total 30 features
-#excellent= prep_df.loc[prep_df["ESG categories"]=="A"] # define malignant
-#bad=prep_df.loc[prep_df["ESG categories"]=="D"] # define benign
-#ax=axes.ravel()# flat axes with numpy ravel
-#for i in range(30):
-#  _,bins=np.histogram(prep_df.iloc[:,i],bins=40)
-#  ax[i].hist(excellent.iloc[:,i],bins=bins,color='r',alpha=.5)# red color for malignant class
-#  ax[i].hist(bad.iloc[:,i],bins=bins,color='g',alpha=0.3)# alpha is           for transparency in the overlapped region 
-#  ax[i].set_title(prep_df.columns[i],fontsize=9)
-#  ax[i].axes.get_xaxis().set_visible(False) # the x-axis co-ordinates are not so useful, as we just want to look how well separated the histograms are
-#  ax[i].set_yticks(())
-#ax[0].legend(['excellent','bad'],loc='best',fontsize=8)
-#plt.tight_layout()# let's make good plots
-#plt.show()
-```
+### Bibliography:
+- [PCA Analysis with Python](https://towardsdatascience.com/dive-into-pca-principal-component-analysis-with-python-43ded13ead21)
+- [Clustering Algorithms with Python - MachineLearningMastery](https://machinelearningmastery.com/clustering-algorithms-with-python/)
+- [10 Clustering Algorithms to know - KD Nuggets](https://www.kdnuggets.com/2019/10/right-clustering-algorithm.html)
+- [The Five Clustering Algorithms Dtaa Scientists need to know - Towards Data Science](https://towardsdatascience.com/the-5-clustering-algorithms-data-scientists-need-to-know-a36d136ef68)  
+- [Solving the Data Dilemma in ESG Quant Investing - Invest Summit](https://www.youtube.com/watch?v=OA4axeZ-DmY)
+- [Shades of Green: Investor Approaches to ESG - MSCI ](https://www.msci.com/perspectives-podcast/shades-of-green-investor-approaches-esg)
+- [More Regulators Pick up the ESG Baton - KPMG](https://home.kpmg/lu/en/home/insights/2020/12/more-regulators-pick-up-the-esg-baton.html)  
+- Qualitative Interviews with over 50 Sustainable Finance experts in France and Luxemburg  
 
-```python
-
-```
+- [Clustering by Passing Messages Between the datapoints](https://science.sciencemag.org/content/315/5814/972)
+- Bernhard Schoelkopf, Alexander J. Smola, and Klaus-Robert Mueller. 1999. Kernel principal component analysis. In Advances in kernel methods, MIT Press, Cambridge, MA, USA 327-352.  
+- [Sirus](https://hal.archives-ouvertes.fr/hal-02190689v2)

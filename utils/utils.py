@@ -18,6 +18,8 @@ from sklearn.ensemble import RandomForestRegressor
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+from sklearn.metrics import confusion_matrix, accuracy_score
+
 # Import clustering methods
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
@@ -298,7 +300,7 @@ def load_df(input_path, input_filename):
     return initial_df
 
 
-def generate_jsons(symbols, sedols, js_timeout=2, output_path='../msci_data/'):
+def generate_jsons(symbols, sedols, js_timeout=2, output_path='msci_data/'):
     """
     Gets MSCI ratings for each symbol, stored in a separate json file
     """
@@ -310,7 +312,7 @@ def generate_jsons(symbols, sedols, js_timeout=2, output_path='../msci_data/'):
             js_timeout=js_timeout
         )
         response["symbol"] = symbol
-        reponse["sedol"] = sedols[symbols.index(symbol)]
+        response["sedol"] = sedols[symbols.index(symbol)]
         with open(output_path + str(counter) + '.json', 'w') as fp:
             json.dump(response, fp)
         counter += 1
@@ -387,3 +389,189 @@ def expand_history(clean_dicts):
             df.loc[index] = [msci_2016, msci_2017, msci_2018, msci_2019, msci_2020]
     return df
     #source venv/bin/activate
+
+# ESG Predictions
+
+# Utils
+
+def plot_pca(pca, percent=False, cumsum=False):
+    ticks = list(range(pca.n_components))[::10]
+    labels = [x for x in ticks]
+    if percent == True:
+        if cumsum == True:
+            figure(figsize=(10, 4))
+            plt.plot(np.cumsum(pca.explained_variance_ratio_))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/PCA_feature_selection_cumsum_percent.png")
+            plt.show()
+        else:
+            figure(figsize=(10, 4))
+            plt.plot(pca.explained_variance_ratio_)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, explained variance in %")
+            plt.savefig("images/PCA_feature_selection_percent.png")
+            plt.show()
+    else:
+        if cumsum == True:
+            figure(figsize=(10, 4))
+            plt.plot(np.cumsum(pca.explained_variance_))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/PCA_feature_selection_cumsum.png")
+            plt.show()
+        else:
+            figure(figsize=(10, 4))
+            plt.plot(pca.explained_variance_, )
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("PCA feature selection")
+            plt.savefig("images/PCA_feature_selection.png")
+            plt.show()
+
+
+def plot_kpca(kpca, percent=False, cumsum=False):
+    ticks = list(range(kpca.n_components))[::10]
+    labels = [x for x in ticks]
+    explained_variance = np.var(full_kpca_features, axis=0)
+    explained_variance_ratio = explained_variance / np.sum(explained_variance)
+    if percent == True:
+        if cumsum == True:
+            figure(figsize=(10, 4))
+            plt.plot(np.cumsum(explained_variance_ratio))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_cumsum_percent.png")
+            plt.show()
+        else:
+            figure(figsize=(10, 4))
+            plt.plot(explained_variance_ratio)
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance %")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_percent.png")
+            plt.show()
+    else:
+        if cumsum == True:
+            figure(figsize=(10, 4))
+            plt.plot(np.cumsum(explained_variance))
+            plt.xlabel("Number of components")
+            plt.ylabel("Cumsum of explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection, cumsum explained variance in %")
+            plt.savefig("images/KPCA_feature_selection_cumsum.png")
+            plt.show()
+        else:
+            figure(figsize=(10, 4))
+            plt.plot(explained_variance, )
+            plt.xlabel("Number of components")
+            plt.ylabel("Explained variance")
+            plt.xticks(ticks=ticks, labels=labels)
+            plt.title("KPCA feature selection")
+            plt.savefig("images/KPCA_feature_selection.png")
+            plt.show()
+
+
+def kmeans(X, kmeans_kwargs, upper=10, plot=True):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    lower = 1
+    for k in range(lower, upper):
+        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+        kmeans.fit(X)
+        sse.append(kmeans.inertia_)
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        plt.plot(range(lower + 1, upper + 1), sse)
+        plt.xticks(range(lower + 1, upper + 1), rotation=45)
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for KMeans")
+        plt.savefig('images/elbow_graph_kmeans.png')
+        plt.show()
+    return sse
+
+
+def m_kmeans(X, upper=10, plot=True):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the SSE values for each k
+    sse = []
+    lower = 1
+    for k in range(lower, upper):
+        model = MiniBatchKMeans(n_clusters=k)
+        model.fit(X)
+        sse.append(model.inertia_)
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        plt.plot(range(lower + 1, upper + 1), sse)
+        plt.xticks(range(lower + 1, upper + 1))
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for Mini-batch KMeans")
+        plt.show()
+        plt.savefig('images/elbow_graph_mkmeans.png')
+        plt.show()
+    return sse
+
+
+def simplify_categories(series):
+    return series.str.replace("+", "").str.replace("-", "")
+
+
+def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="kmean_labels", ):
+    X_trunc = X.loc[:, "Fundamental Human Rights ILO UN":"Bribery, Corruption and Fraud Controversies"]
+    if with_labels == False:
+        X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
+    else:
+        X_labels = [X_trunc, X.loc[:, labels]]
+        X_train, X_test, y_train, y_test = train_test_split(X_labels, y, test_size=test_size, random_state=0)
+
+    model = RandomForestClassifier(**params)
+    model.fit(X_train, y_train)
+    return model, X_train, X_test, y_train, y_test
+
+
+def confusion_mat_df(model, y_test, y_pred, percent=False):
+    """
+    Format the confusion matrix properly.
+    """
+    print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
+    if percent == False:
+        confusion_mat = confusion_matrix(y_test, y_pred)
+    else:
+        confusion_mat = confusion_matrix(y_test, y_pred) / confusion_matrix(y_test, y_pred).sum(axis=0) * 100
+    confusion_mat = pd.DataFrame(confusion_mat)
+    confusion_mat.columns = model.classes_
+    confusion_mat.index = model.classes_
+    return confusion_mat
