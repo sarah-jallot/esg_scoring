@@ -137,186 +137,6 @@ pillar_mapping = {
 
 # Basic Clustering
 
-```python
-# Utils
-
-def plot_pca(pca, percent=False, cumsum=False):
-    ticks = list(range(pca.n_components))[::10]
-    labels = [x for x in ticks]
-    if percent == True: 
-        if cumsum == True:
-            figure(figsize=(10,4))
-            plt.plot(np.cumsum(pca.explained_variance_ratio_))
-            plt.xlabel("Number of components")
-            plt.ylabel("Cumsum of explained variance %")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("PCA feature selection, cumsum explained variance in %")
-            plt.savefig("images/PCA_feature_selection_cumsum_percent.png")  
-            plt.show()
-        else:
-            figure(figsize=(10,4))
-            plt.plot(pca.explained_variance_ratio_)
-            plt.xlabel("Number of components")
-            plt.ylabel("Explained variance %")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("PCA feature selection, explained variance in %")
-            plt.savefig("images/PCA_feature_selection_percent.png")  
-            plt.show()
-    else:
-        if cumsum == True:
-            figure(figsize=(10,4))
-            plt.plot(np.cumsum(pca.explained_variance_))
-            plt.xlabel("Number of components")
-            plt.ylabel("Cumsum of explained variance")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("PCA feature selection, cumsum explained variance in %")
-            plt.savefig("images/PCA_feature_selection_cumsum.png")  
-            plt.show()
-        else:
-            figure(figsize=(10,4))
-            plt.plot(pca.explained_variance_,)
-            plt.xlabel("Number of components")
-            plt.ylabel("Explained variance")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("PCA feature selection")
-            plt.savefig("images/PCA_feature_selection.png")
-            plt.show()
-
-            
-def plot_kpca(kpca, percent=False, cumsum=False):
-    ticks = list(range(kpca.n_components))[::10]
-    labels = [x for x in ticks]
-    explained_variance = np.var(full_kpca_features, axis=0)
-    explained_variance_ratio = explained_variance / np.sum(explained_variance)
-    if percent == True: 
-        if cumsum == True:
-            figure(figsize=(10,4))
-            plt.plot(np.cumsum(explained_variance_ratio))
-            plt.xlabel("Number of components")
-            plt.ylabel("Cumsum of explained variance %")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("KPCA feature selection, cumsum explained variance in %")
-            plt.savefig("images/KPCA_feature_selection_cumsum_percent.png")  
-            plt.show()
-        else:
-            figure(figsize=(10,4))
-            plt.plot(explained_variance_ratio)
-            plt.xlabel("Number of components")
-            plt.ylabel("Explained variance %")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("KPCA feature selection, explained variance in %")
-            plt.savefig("images/KPCA_feature_selection_percent.png")  
-            plt.show()
-    else:
-        if cumsum == True:
-            figure(figsize=(10,4))
-            plt.plot(np.cumsum(explained_variance))
-            plt.xlabel("Number of components")
-            plt.ylabel("Cumsum of explained variance")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("KPCA feature selection, cumsum explained variance in %")
-            plt.savefig("images/KPCA_feature_selection_cumsum.png")  
-            plt.show()
-        else:
-            figure(figsize=(10,4))
-            plt.plot(explained_variance,)
-            plt.xlabel("Number of components")
-            plt.ylabel("Explained variance")
-            plt.xticks(ticks=ticks, labels=labels)
-            plt.title("KPCA feature selection")
-            plt.savefig("images/KPCA_feature_selection.png")
-            plt.show()
-        
-def kmeans(X, kmeans_kwargs, upper=10, plot = True):
-    """
-    Run the kmeans algorithm for various numbers of clusters. 
-    Plot the elbow graph to find the optimal k. 
-    X: normalised features to perform clustering on. 
-    kmeans_kwargs: dictionary containing your kmeans arguments. 
-    upper: the maximal number of clusters to test. 
-    plot: boolean indicating whether to plot the elbow graph. 
-    
-    :returns: the sse as a list. 
-    """
-    # A list holds the SSE values for each k
-    sse = []
-    lower=1
-    for k in range(lower, upper):
-        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-        kmeans.fit(X)
-        sse.append(kmeans.inertia_)
-    if plot == True: 
-        plt.style.use("fivethirtyeight")
-        plt.figure(figsize=(15,5))
-        plt.plot(range(lower+1, upper+1), sse)
-        plt.xticks(range(lower+1, upper+1), rotation=45)
-        plt.xlabel("Number of Clusters")
-        plt.ylabel("SSE")
-        plt.title("Elbow graph for KMeans")
-        plt.savefig('images/elbow_graph_kmeans.png')
-        plt.show()
-    return sse
-
-def m_kmeans(X, upper=10, plot = True):
-    """
-    Run the kmeans algorithm for various numbers of clusters. 
-    Plot the elbow graph to find the optimal k. 
-    X: normalised features to perform clustering on. 
-    kmeans_kwargs: dictionary containing your kmeans arguments. 
-    upper: the maximal number of clusters to test. 
-    plot: boolean indicating whether to plot the elbow graph. 
-    
-    :returns: the sse as a list. 
-    """
-    # A list holds the SSE values for each k
-    sse = []
-    lower=1
-    for k in range(lower, upper):
-        model = MiniBatchKMeans(n_clusters=k)
-        model.fit(X)
-        sse.append(model.inertia_)
-    if plot == True: 
-        plt.style.use("fivethirtyeight")
-        plt.figure(figsize=(15,5))
-        plt.plot(range(lower+1, upper+1), sse)
-        plt.xticks(range(lower+1, upper+1))
-        plt.xlabel("Number of Clusters")
-        plt.ylabel("SSE")
-        plt.title("Elbow graph for Mini-batch KMeans")
-        plt.show()
-        plt.savefig('images/elbow_graph_mkmeans.png')
-        plt.show()
-    return sse
-
-def simplify_categories(series):
-    return series.str.replace("+", "").str.replace("-", "")
-
-def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="kmean_labels",):
-    X_trunc = X.loc[:,"Fundamental Human Rights ILO UN":"Bribery, Corruption and Fraud Controversies"]
-    if with_labels == False:
-        X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
-    else:
-        X_labels = [X_trunc, X.loc[:,labels]]
-        X_train, X_test, y_train, y_test = train_test_split(X_labels, y, test_size=test_size, random_state=0)
-    
-    model = RandomForestClassifier(**params)
-    model.fit(X_train,y_train)
-    return model, X_train, X_test, y_train, y_test
-
-def confusion_mat_df(model, y_test, y_pred, percent=False):
-    """
-    Format the confusion matrix properly. 
-    """
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
-    if percent == False: 
-        confusion_mat = confusion_matrix(y_test, y_pred)
-    else:
-        confusion_mat = confusion_matrix(y_test, y_pred)/confusion_matrix(y_test, y_pred).sum(axis=0)*100
-    confusion_mat = pd.DataFrame(confusion_mat)
-    confusion_mat.columns = model.classes_
-    confusion_mat.index = model.classes_
-    return confusion_mat
-```
 
 ## Dimensionality reduction techniques
 
@@ -418,11 +238,11 @@ prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
 ```
 
 ```python
-plot_kpca(kpca, percent=False, cumsum=False)
+plot_kpca(kpca, full_kpca_features, percent=False, cumsum=False)
 ```
 
 ```python
-plot_kpca(kpca, percent=True, cumsum=True)
+plot_kpca(kpca, full_kpca_features, percent=True, cumsum=True)
 ```
 
 In this graph, we see that KPCA is more successful at reducing data dimensionality, although we are not in an ideal setting. 
@@ -619,6 +439,9 @@ X = scaler.fit_transform(np.array(pd.read_csv("../inputs/X_rf.csv")))
 
 Assign examples to each cluster while trying to minimize the variance within each cluster. Let's perform the elbow method to determine the optimal number of clusters.
 
+
+We retro-ajust the number of clusters to make them informative regarding ESG Scoring. 
+
 ```python
 kmeans_kwargs = {
     "init": "random",
@@ -632,10 +455,8 @@ kmeans_kwargs = {
 sse = kmeans(X, kmeans_kwargs, upper=50, plot=True)
 ```
 
-Based on this elbow graph, we select 30 as the optimal number of clusters.
-
 ```python
-optimal_nb = 20
+optimal_nb = 10
 ```
 
 ```python
@@ -645,11 +466,28 @@ optimal_kmeans.fit(X)
 
 ```python
 prep_df["kmean_labels"] = optimal_kmeans.labels_
-X_rf["kmean_labels"] = optimal_kmeans.labels_
+#X["kmean_labels"] = optimal_kmeans.labels_
 ```
 
 ```python
-X_rf["kmean_labels"].value_counts()
+prep_df["kmean_labels"].value_counts()
+```
+
+```python
+prep_df["ESG Category"] = simplify_categories(prep_df["ESG Score Grade"])
+```
+
+```python
+plt.figure(figsize=(17,8))
+sns.countplot(
+    x="kmean_labels", 
+    hue="ESG Category", 
+  #  order = ["A", "B", "C", "D"],
+    data=prep_df, 
+    palette="husl", 
+)
+plt.title("ESG Category repartition by cluster.")
+plt.show()
 ```
 
 To run our data exploration, we perform it on the initial dataframe. 
@@ -659,10 +497,6 @@ df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"
 df.loc[:,"kmean_labels"] = X_rf.loc[:,"kmean_labels"]
 ```
 
-```python
-
-```
-
 #### Mini-batch Kmeans
 
 ```python
@@ -670,7 +504,7 @@ sse = m_kmeans(X, upper=50, plot=True)
 ```
 
 ```python
-optimal_nb = 20
+optimal_nb = 10
 ```
 
 ```python
@@ -681,11 +515,24 @@ yhat = optimal_mkmeans.predict(X)
 
 ```python
 prep_df["mkmean_labels"] = optimal_mkmeans.labels_
-X_rf["mkmean_labels"] = optimal_mkmeans.labels_
+#X_rf["mkmean_labels"] = optimal_mkmeans.labels_
 ```
 
 ```python
-X_rf["mkmean_labels"].value_counts()
+prep_df["mkmean_labels"].value_counts()
+```
+
+```python
+plt.figure(figsize=(17,8))
+sns.countplot(
+    x="mkmean_labels", 
+    hue="ESG Category", 
+  #  order = ["A", "B", "C", "D"],
+    data=prep_df, 
+    palette="husl", 
+)
+plt.title("ESG Category repartition by cluster.")
+plt.show()
 ```
 
 ```python
@@ -971,8 +818,8 @@ scatterplot(
 ```
 
 ```python
-X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
-prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
+#X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
+#prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
 ```
 
 ### Cluster interpretation and visualisation. 
@@ -1044,6 +891,27 @@ cluster_boxplot(df, feature_name = continuous_name, clusters=clusters)
 cluster_catplot(df, feature_name =categorical_name , clusters=clusters)
 ```
 
+```python
+df["ESG Category"] = simplify_categories(df["ESG Score Grade"])
+```
+
+```python
+df["ESG Category"].value_counts().index
+```
+
+```python
+plt.figure(figsize=(17,8))
+sns.countplot(
+    x="kmean_labels", 
+    hue="ESG Category", 
+  #  order = ["A", "B", "C", "D"],
+    data=df, 
+    palette="husl", 
+)
+plt.title("ESG Category repartition by cluster.")
+plt.show()
+```
+
 Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
 
 
@@ -1093,10 +961,6 @@ params = {
 ```
 
 ```python
-
-```
-
-```python
 model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params)
 ```
 
@@ -1105,8 +969,7 @@ y_pred = model.predict(X_test)
 ```
 
 ```python
-print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
-print(confusion_matrix(y_test, y_pred))
+confusion_mat_df(model, y_test, y_pred, percent=False)
 ```
 
 ```python
@@ -1114,10 +977,21 @@ confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ```python
-test = pd.DataFrame(y_test)
-test["predictions"] = y_pred
-test.columns = ["truth", "predictions"]
-test
+model, X_train, X_test, y_train, y_test = train_random_forest(
+    X, 
+    y, 
+    params, 
+    test_size=0.4, 
+    with_labels=True, 
+    labels="kmean_labels",)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=False)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ```python
@@ -1134,26 +1008,6 @@ boxplot(pred_df, columns, filename="MSCI_ESG_score_sector.png", categorical=True
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Environmental Pillar Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Social Pillar Score Grade")
 #scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Governance Pillar Score Grade")
-
-grades_dict = {
-    'A+':  'A', 
-    'A':  'A', 
-    'A-':  'A',
-    'B+': 'B', 
-    'B-': 'B', 
-    'B':  'B', 
-    'C+': 'C', 
-    'C':  'C', 
-    'C-':  'C', 
-    'D+':  'D', 
-    'D':  'D', 
-    'D-':  'D',
-}
-
-prep_df["ESG categories"] = prep_df["ESG Score Grade"].map(grades_dict)
-prep_df["Environmental categories"] = prep_df["Environmental Pillar Score Grade"].map(grades_dict)
-prep_df["Social categories"] = prep_df["Social Pillar Score Grade"].map(grades_dict)
-prep_df["Governance categories"] = prep_df["Governance Pillar Score Grade"].map(grades_dict)
 
 scatterplot(
     prep_df, 

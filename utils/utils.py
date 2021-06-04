@@ -15,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import KernelPCA
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
@@ -437,10 +438,10 @@ def plot_pca(pca, percent=False, cumsum=False):
             plt.show()
 
 
-def plot_kpca(kpca, percent=False, cumsum=False):
+def plot_kpca(kpca, kpca_features, percent=False, cumsum=False):
     ticks = list(range(kpca.n_components))[::10]
     labels = [x for x in ticks]
-    explained_variance = np.var(full_kpca_features, axis=0)
+    explained_variance = np.var(kpca_features, axis=0)
     explained_variance_ratio = explained_variance / np.sum(explained_variance)
     if percent == True:
         if cumsum == True:
@@ -554,7 +555,7 @@ def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="
     if with_labels == False:
         X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
     else:
-        X_labels = [X_trunc, X.loc[:, labels]]
+        X_labels = pd.merge(X_trunc, pd.get_dummies(X.loc[:,labels], prefix=labels), left_index=True, right_index=True)
         X_train, X_test, y_train, y_test = train_test_split(X_labels, y, test_size=test_size, random_state=0)
 
     model = RandomForestClassifier(**params)
