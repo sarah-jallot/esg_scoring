@@ -313,7 +313,7 @@ df.groupby("Fundamental Human Rights ILO UN").mean().loc[:,["Market Capitalizati
 
 ```python
 columns = ["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5),order=["D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"])
+catplot(df, columns, figsize=(11,0.5),order=['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-'])
 ```
 
 It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
@@ -1136,22 +1136,52 @@ plt.show()
 
 ```python
 initial_df = pd.read_csv("../inputs/universe_df_encoded_pca.csv")
-#df = add_msci(initial_df)
-df = df.drop_duplicates(["Name"])
+df = add_msci(initial_df)
 df.shape
+```
+
+```python
+df = df.drop_duplicates(["Name"])
 ```
 
 ```python
 X_temp = pd.read_csv(input_path+"X_rf_labelled.csv")
 features = list(X_temp.columns)
 
-df = pd.merge(X_temp, df.drop(labels= df[df["MSCI_rating"].isna()].index)["MSCI_rating"], left_index=True, right_index=True)
+df = pd.merge(X_temp, df.drop(labels= df[df["MSCI_rating"].isna()].index).loc[:,["MSCI_rating", "ESG Score Grade"]], left_index=True, right_index=True)
 X,y = df.loc[:,features], df.loc[:,"MSCI_rating"]
 ```
 
 ```python
 y = simplify_msci_categories(y)
 df["MSCI Category"] = y.copy()
+df["ESG Category"] = simplify_categories(df["ESG Score Grade"])
+```
+
+```python
+pd.crosstab(df["ESG Category"], df["MSCI Category"])
+```
+
+```python
+print(f"Cramer's coeff  : {cramers_stat(df, 'ESG Category', 'MSCI Category'):.2f} | Corrected coeff : {cramers_corrected_stat(df, 'ESG Category', 'MSCI Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    df, 
+    "kmean_labels", 
+    "MSCI_rating", 
+    hue_order=["aaa","aa","bbb","bb","b","ccc"],
+    filename="MSCI_cat_aff.png")
+```
+
+```python
+categorical_countplot(
+    df, 
+    "kmean_labels", 
+    "MSCI Category", 
+    hue_order=["a","b","c"], 
+    filename="MSCI_cat_aff.png")
 ```
 
 ```python
@@ -1162,7 +1192,7 @@ params = {
 ```
 
 ```python
-model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params, test_size=0.2)
+model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params, test_size=0.4)
 ```
 
 ```python
@@ -1189,33 +1219,11 @@ for label in labels:
 ```
 
 ```python
-df
-```
-
-```python
-categorical_countplot(
-    df, 
-    "kmean_labels", 
-    "MSCI_rating", 
-    hue_order=["aaa","aa","bbb","bb","b","ccc"],
-    filename="MSCI_cat_aff.png")
-```
-
-```python
-categorical_countplot(
-    df, 
-    "kmean_labels", 
-    "MSCI Category", 
-    hue_order=["a","b","c"], 
-    filename="MSCI_cat_aff.png")
-```
-
-```python
 model, X_train, X_test, y_train, y_test = train_random_forest(
     X, 
     y, 
     params, 
-    test_size=0.2, 
+    test_size=0.4, 
     with_labels=True, 
     labels="aff_labels",)
 ```
