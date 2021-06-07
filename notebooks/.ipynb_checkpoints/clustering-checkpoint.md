@@ -18,6 +18,7 @@ First, run all necessary imports.
 
 ```python
 import pandas as pd
+import pprint
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
@@ -205,11 +206,11 @@ We can check visually that there is no jump in explained variance, meaning that 
 ```python
 prep_df["PCA_1"] = pd.Series(full_pca_features[:,0])
 prep_df["PCA_2"] = pd.Series(full_pca_features[:,1])
-scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot", hue=None)
+scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot", hue=None, filename="pca_scatterplot.png")
 ```
 
 ```python
-scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="GICS Sector Name")
+scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="GICS Sector Name", filename="pca_scatterplot_coloured.png")
 ```
 
 ```python
@@ -254,12 +255,20 @@ plt.show()
 ```
 
 ```python
-scatterplot(prep_df, x_axis="KPCA_1", y_axis="KPCA_2", title="KPCA scatterplot by sector", hue="GICS Sector Name")
+scatterplot(
+    prep_df, 
+    x_axis="KPCA_1", 
+    y_axis="KPCA_2", 
+    title="KPCA scatterplot by sector", 
+    hue="GICS Sector Name", 
+    filename="kpca_sector_scatterplot.png"
+)
 ```
 
 ```python
 X_kpca = selected_kpca_features
 pd.DataFrame(X_kpca).to_csv("../inputs/X_kpca.csv", index=False)
+prep_df.to_csv("../inputs/universe_df_encoded_pca.csv", index=False)
 ```
 
 ### Random Forest
@@ -304,7 +313,7 @@ df.groupby("Fundamental Human Rights ILO UN").mean().loc[:,["Market Capitalizati
 
 ```python
 columns = ["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
+catplot(df, columns, figsize=(11,0.5),order=["D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"])
 ```
 
 It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
@@ -317,7 +326,8 @@ scatterplot(
     x_axis="Market Capitalization (bil) [USD]", 
     y_axis="ESG Score", 
     title="ESG Score as a function of Market Cap",
-    hue=None
+    hue=None,
+    filename="esg_score_market_cap_scatterplot.png"
 )
 ```
 
@@ -327,8 +337,10 @@ scatterplot(
     x_axis="Board Gender Diversity, Percent", 
     y_axis="ESG Score", 
     title="ESG Score as a function of Board gender diversity, %",
-    hue=None
+    hue=None,
+    filename="esg_score_gender_div_scatterplot.png"
 )
+
 ```
 
 ```python
@@ -339,7 +351,8 @@ scatterplot(
     x_axis="Salary Gap", 
     y_axis="ESG Score", 
     title="ESG Score as a function of Salary Gap",
-    hue=None
+    hue=None,
+    filename="esg_score_salary_gap_scatterplot.png"
 )
 ```
 
@@ -351,7 +364,8 @@ scatterplot(
     x_axis="CO2 Equivalent Emissions Indirect, Scope 2", 
     y_axis="ESG Score", 
     title="ESG Score as a function of Scope 2 Carbon Emissions",
-    hue=None
+    hue=None,
+    filename="esg_score_co2_eq_scope2_scatterplot.png"
 )
 ```
 
@@ -399,17 +413,8 @@ scatterplot(
     x_axis="Board Gender Diversity, Percent", 
     y_axis="Market Capitalization (bil) [USD]", 
     title="Random Forest Feature Selection",
-    hue=None
-)
-```
-
-```python
-scatterplot(
-    X_rf, 
-    x_axis="Board Gender Diversity, Percent", 
-    y_axis="Market Capitalization (bil) [USD]", 
-    hue="Fundamental Human Rights ILO UN", 
-    title="Scatterplot"
+    hue=None,
+    filename="market_cap_gender_div_scatterplot.png"
 )
 ```
 
@@ -428,10 +433,17 @@ As such, cluster analysis is an iterative process where subjective evaluation of
 Our dimensionality reduction process pushes us to retain the 18 features from the Random Forest Algorithm.
 
 ```python
+X_rf = pd.read_csv("../inputs/X_rf.csv")
+prep_df = pd.read_csv("../inputs/universe_df_encoded_pca.csv")
+prep_df["ESG Category"] = simplify_categories(prep_df["ESG Score Grade"])
+df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"])
+```
+
+```python
 #X = np.array(pd.read_csv("../inputs/X_pca.csv"))
 #X = np.array(pd.read_csv("../inputs/X_kpca.csv"))
 scaler = StandardScaler()
-X = scaler.fit_transform(np.array(pd.read_csv("../inputs/X_rf.csv")))
+X = scaler.fit_transform(np.array(X_rf))
 ```
 
 #### K-means
@@ -457,44 +469,34 @@ sse = kmeans(X, kmeans_kwargs, upper=50, plot=True)
 
 ```python
 optimal_nb = 10
-```
-
-```python
 optimal_kmeans = KMeans(n_clusters=optimal_nb, **kmeans_kwargs)
 optimal_kmeans.fit(X)
 ```
 
 ```python
 prep_df["kmean_labels"] = optimal_kmeans.labels_
-#X["kmean_labels"] = optimal_kmeans.labels_
+X_rf["kmean_labels"] = optimal_kmeans.labels_
+```
+
+Now, let's see whether our clusters seem to separate companies efficiently along ESG Scoring: 
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'kmean_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'kmean_labels', 'ESG Category'):.2f}")
 ```
 
 ```python
-prep_df["kmean_labels"].value_counts()
+categorical_countplot(prep_df, "kmean_labels", "ESG Category", filename="ESG_cat_kmeans.png")
 ```
 
 ```python
-prep_df["ESG Category"] = simplify_categories(prep_df["ESG Score Grade"])
-```
-
-```python
-plt.figure(figsize=(17,8))
-sns.countplot(
-    x="kmean_labels", 
-    hue="ESG Category", 
-  #  order = ["A", "B", "C", "D"],
-    data=prep_df, 
-    palette="husl", 
+scatterplot(
+    prep_df, 
+    "KPCA_1", 
+    "KPCA_2", 
+    "kmean_labels", 
+    "KPCA coloured by kmeans",
+    "kpca_kmeans_scatterplot.png"
 )
-plt.title("ESG Category repartition by cluster.")
-plt.show()
-```
-
-To run our data exploration, we perform it on the initial dataframe. 
-
-```python
-df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"])
-df.loc[:,"kmean_labels"] = X_rf.loc[:,"kmean_labels"]
 ```
 
 #### Mini-batch Kmeans
@@ -505,17 +507,13 @@ sse = m_kmeans(X, upper=50, plot=True)
 
 ```python
 optimal_nb = 10
-```
-
-```python
 optimal_mkmeans = MiniBatchKMeans(n_clusters=optimal_nb)
 optimal_mkmeans.fit(X)
-yhat = optimal_mkmeans.predict(X)
 ```
 
 ```python
 prep_df["mkmean_labels"] = optimal_mkmeans.labels_
-#X_rf["mkmean_labels"] = optimal_mkmeans.labels_
+X_rf["mkmean_labels"] = optimal_mkmeans.labels_
 ```
 
 ```python
@@ -523,16 +521,11 @@ prep_df["mkmean_labels"].value_counts()
 ```
 
 ```python
-plt.figure(figsize=(17,8))
-sns.countplot(
-    x="mkmean_labels", 
-    hue="ESG Category", 
-  #  order = ["A", "B", "C", "D"],
-    data=prep_df, 
-    palette="husl", 
-)
-plt.title("ESG Category repartition by cluster.")
-plt.show()
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'mkmean_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'mkmean_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(prep_df, "mkmean_labels", "ESG Category", ["A","B","C","D"], filename="ESG_cat_mkmeans.png")
 ```
 
 ```python
@@ -541,7 +534,8 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "mkmean_labels", 
-    "KPCA coloured by Mini-kmeans"
+    "KPCA coloured by Mini-kmeans",
+    "kpca_kmeans_scatterplot.png"
 )
 ```
 
@@ -551,7 +545,7 @@ scatterplot(
 Affinity propagation finds "exemplars," members of the input set that are representative of clusters.
 
 ```python
-damping = 0.5
+damping = 0.7
 ```
 
 ```python
@@ -559,8 +553,6 @@ damping = 0.5
 aff_model = AffinityPropagation(damping=damping)
 # fit the model
 aff_model.fit(X)
-# assign a cluster to each example
-yhat = aff_model.predict(X)
 ```
 
 ```python
@@ -573,13 +565,27 @@ X_rf["aff_labels"].value_counts()
 ```
 
 ```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'aff_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'aff_labels', 'ESG Category'):.2f}")
+```
+
+```python
 scatterplot(
     prep_df, 
     "KPCA_1", 
     "KPCA_2", 
     "aff_labels", 
-    "KPCA coloured by Affinity propagation"
+    "KPCA coloured by Affinity propagation",
+    "kpca_affinity_scatterplot.png"
 )
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "aff_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_affinity.png")
 ```
 
 #### Agglomerative clustering
@@ -588,8 +594,12 @@ scatterplot(
 Belongs to hierarchical clustering methods.
 
 ```python
+n_clusters = 10
+```
+
+```python
 # define the model
-agg_model = AgglomerativeClustering(n_clusters=optimal_nb)
+agg_model = AgglomerativeClustering(n_clusters=n_clusters)
 # fit model and predict clusters
 yhat = agg_model.fit_predict(X)
 ```
@@ -609,8 +619,22 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "agg_labels", 
-    "KPCA coloured by Aggregation"
+    "KPCA coloured by Aggregation",
+    "kpca_aggregation_scatterplot.png"
 )
+```
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'agg_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'agg_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "agg_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_aggregation.png")
 ```
 
 #### BIRCH Clustering
@@ -626,9 +650,7 @@ threshold = 0.08
 # define the model
 birch_model = Birch(threshold=threshold, n_clusters=optimal_nb)
 # fit the model
-birch_model.fit(X)
-# assign a cluster to each example
-yhat = birch_model.predict(X)
+yhat = birch_model.fit_predict(X)
 ```
 
 ```python
@@ -646,8 +668,22 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "birch_labels", 
-    "KPCA coloured by Mini-kmeans"
+    "KPCA coloured by Mini-kmeans",
+    "kpca_birch_scatterplot.png"
 )
+```
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'birch_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'birch_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "birch_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_affinity.png")
 ```
 
 #### DBSCAN clustering
@@ -657,7 +693,7 @@ Used to find clusters of arbitrary shape.
 
 ```python
 eps = 0.30
-min_samples =10
+min_samples =50
 ```
 
 ```python
@@ -677,13 +713,27 @@ X_rf["dbscan_labels"].value_counts()
 ```
 
 ```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'dbscan_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'dbscan_labels', 'ESG Category'):.2f}")
+```
+
+```python
 scatterplot(
     prep_df, 
     "KPCA_1", 
     "KPCA_2", 
     "dbscan_labels", 
-    "KPCA coloured by Mini-kmeans"
+    "KPCA coloured by DBSCAN",
+    "kpca_dbscan_scatterplot.png"
 )
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "dbscan_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_dbscan.png")
 ```
 
 #### Mean Shift clustering
@@ -693,7 +743,7 @@ Mean shift clustering involves finding and adapting centroids based on the densi
 
 ```python
 # define the model
-mshift_model = MeanShift(min_bin_freq=100)
+mshift_model = MeanShift(min_bin_freq=50)
 # fit model and predict clusters
 yhat = mshift_model.fit_predict(X)
 ```
@@ -713,8 +763,22 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "mshift_labels", 
-    "KPCA coloured by Mean-shift"
+    "KPCA coloured by Mean-shift",
+    "kpca_mshift_scatterplot.png"
 )
+```
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'mshift_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'mshift_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "mshift_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_mshift.png")
 ```
 
 #### OPTICS
@@ -748,21 +812,35 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "optics_labels", 
-    "KPCA coloured by Optics"
+    "KPCA coloured by Optics",
+    "kpca_optics_scatterplot.png"
 )
+```
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'optics_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'optics_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "optics_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_optics.png")
 ```
 
 #### Spectral clustering
 
 ```python
-optimal_nb = 20
+n_clusters = 20
 ```
 
 Here, one uses the top eigenvectors of a matrix derived from the distance between points.
 
 ```python
 # define the model
-spec_model = SpectralClustering(n_clusters=optimal_nb)
+spec_model = SpectralClustering(n_clusters=n_clusters)
 # fit model and predict clusters
 yhat = spec_model.fit_predict(X)
 ```
@@ -778,8 +856,22 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "spectral_labels", 
-    "KPCA coloured by Spectral labels"
+    "KPCA coloured by Spectral labels",
+    "kpca_spectral_scatterplot.png"
 )
+```
+
+```python
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'spectral_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'spectral_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "spectral_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_spectral.png")
 ```
 
 #### Gaussian Mixture Clustering
@@ -788,12 +880,12 @@ scatterplot(
 A Gaussian mixture model summarizes a multivariate probability density function with a mixture of Gaussian probability distributions as its name suggests.
 
 ```python
-optimal_nb = 15
+n_clusters = 20
 ```
 
 ```python
 # define the model
-gmm_model = GaussianMixture(n_components=optimal_nb)
+gmm_model = GaussianMixture(n_components=n_clusters)
 # fit the model
 gmm_model.fit(X)
 ```
@@ -813,13 +905,27 @@ scatterplot(
     "KPCA_1", 
     "KPCA_2", 
     "gaussian_labels", 
-    "KPCA coloured by Gaussian Labels"
+    "KPCA coloured by Gaussian Labels",
+    "kpca_gaussian_scatterplot.png"
 )
 ```
 
 ```python
-#X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
-#prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
+print(f"Cramer's coeff: {cramers_stat(prep_df, 'gaussian_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(prep_df, 'gaussian_labels', 'ESG Category'):.2f}")
+```
+
+```python
+categorical_countplot(
+    prep_df, 
+    "gaussian_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_gaussian.png")
+```
+
+```python
+X_rf.to_csv("../inputs/X_rf_labelled.csv", index=False)
+prep_df.to_csv("../inputs/prep_df_labelled.csv", index=False)
 ```
 
 ### Cluster interpretation and visualisation. 
@@ -896,20 +1002,16 @@ df["ESG Category"] = simplify_categories(df["ESG Score Grade"])
 ```
 
 ```python
-df["ESG Category"].value_counts().index
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_mkmeans.png")
 ```
 
 ```python
-plt.figure(figsize=(17,8))
-sns.countplot(
-    x="kmean_labels", 
-    hue="ESG Category", 
-  #  order = ["A", "B", "C", "D"],
-    data=df, 
-    palette="husl", 
-)
-plt.title("ESG Category repartition by cluster.")
-plt.show()
+print(f"Cramer's coeff: {cramers_stat(df, 'mkmean_labels', 'ESG Category'):.2f} | Corrected coeff: {cramers_corrected_stat(df, 'mkmean_labels', 'ESG Category'):.2f}")
 ```
 
 Once we have made satisfactory clusters with our data, we are going to use them first to predict Refinitiv score and then to build our own.
@@ -946,7 +1048,9 @@ L'idée est de voir si, à partir des indicateurs requis par SFDR, il nous est p
 ```python
 X = pd.read_csv(input_path+"X_rf_labelled.csv")
 y = pd.read_csv(input_path+"/universe_df_encoded.csv").loc[:,"ESG Score Grade"]
-df = pd.DataFrame(X,y)
+df = X.copy()
+df["ESG Score Grade"] = y.copy()
+df["ESG Category"] = simplify_categories(df["ESG Score Grade"])
 ```
 
 ```python
@@ -955,13 +1059,13 @@ y = simplify_categories(y)
 
 ```python
 params = {
-    "n_estimators":500, 
+    "n_estimators":200, 
     "max_depth":10,
 }
 ```
 
 ```python
-model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params)
+model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params, test_size=0.2)
 ```
 
 ```python
@@ -977,13 +1081,92 @@ confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ```python
+pp = PrettyPrinter(indent=3)
+pp.pprint(list(X.columns[-10:]))
+```
+
+```python
+labels = list(X.columns[-10:])
+for label in labels:
+    print(f"Cramer's coeff {label} : {cramers_stat(df, label, 'ESG Category'):.2f} | Corrected coeff {label} : {cramers_corrected_stat(df, label, 'ESG Category'):.2f}")
+```
+
+```python
 model, X_train, X_test, y_train, y_test = train_random_forest(
     X, 
     y, 
     params, 
-    test_size=0.4, 
+    test_size=0.2, 
     with_labels=True, 
-    labels="kmean_labels",)
+    labels="aff_labels",)
+```
+
+```python
+y_pred = model.predict(X_test)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=False)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=True)
+```
+
+From this confusion matrix, we see that catagory A is predicted very well from SFDR metrics + mkmeans labels.
+
+```python
+best_model = model
+```
+
+```python
+n_features = 15
+
+importances = pd.DataFrame(list(X_train.columns))
+importances["feature_importances"] = best_model.feature_importances_
+importances.columns = ["features", "importances"]
+importances = importances.sort_values(by=["importances"], ascending=False).reset_index().copy()
+importances.loc[:, "features":"importances"].plot(kind="barh")
+plt.yticks(ticks=range(n_features), labels=importances[:n_features]["features"])
+plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
+plt.show()
+```
+
+### MSCI Prediction
+
+```python
+initial_df = pd.read_csv("../inputs/universe_df_encoded_pca.csv")
+#df = add_msci(initial_df)
+df = df.drop_duplicates(["Name"])
+df.shape
+```
+
+```python
+X_temp = pd.read_csv(input_path+"X_rf_labelled.csv")
+features = list(X_temp.columns)
+
+df = pd.merge(X_temp, df.drop(labels= df[df["MSCI_rating"].isna()].index)["MSCI_rating"], left_index=True, right_index=True)
+X,y = df.loc[:,features], df.loc[:,"MSCI_rating"]
+```
+
+```python
+y = simplify_msci_categories(y)
+df["MSCI Category"] = y.copy()
+```
+
+```python
+params = {
+    "n_estimators":100, 
+    "max_depth":5,
+}
+```
+
+```python
+model, X_train, X_test, y_train, y_test = train_random_forest(X, y, params, test_size=0.2)
+```
+
+```python
+y_pred = model.predict(X_test)
 ```
 
 ```python
@@ -995,50 +1178,58 @@ confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ```python
-countplot(pred_df,"ESG Score Grade", filename="ESG_score_distribution.png")
-sns.countplot(x="MSCI_rating", hue="GICS Sector Name", data=pred_df)
-plt.figsize((10,10))
-plt.show()
-countplot(pred_df,"MSCI_rating", filename="ESG_score_distribution.png")
-columns = ["GICS Sector Name", "ESG Score"]
-boxplot(pred_df, columns, filename="ESG_score_sector.png", categorical=True)
-columns = ["GICS Sector Name", "MSCI_rating"]
-boxplot(pred_df, columns, filename="MSCI_ESG_score_sector.png", categorical=True)
-#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="ESG Score Grade")
-#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Environmental Pillar Score Grade")
-#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Social Pillar Score Grade")
-#scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="Governance Pillar Score Grade")
+pp = PrettyPrinter(indent=3)
+pp.pprint(list(X.columns[-10:]))
+```
 
-scatterplot(
-    prep_df, 
-    x_axis="PCA_1", 
-    y_axis="PCA_2", 
-    title="PCA scatterplot by ESG Category", 
-    hue="ESG Categories"
-)
+```python
+labels = list(X.columns[-10:])
+for label in labels:
+    print(f"Cramer's coeff {label} : {cramers_stat(df, label, 'MSCI_rating'):.2f} | Corrected coeff {label} : {cramers_corrected_stat(df, label, 'MSCI_rating'):.2f}")
+```
 
-scatterplot(
-    prep_df, 
-    x_axis="PCA_1", 
-    y_axis="PCA_2", 
-    title="PCA scatterplot by Environmental Category", 
-    hue="Environmental Categories"
-)
+```python
+df
+```
 
-scatterplot(
-    prep_df, 
-    x_axis="PCA_1", 
-    y_axis="PCA_2", 
-    title="PCA scatterplot by Social Category", 
-    hue="Social Categories"
-)
-scatterplot(
-    prep_df, 
-    x_axis="PCA_1", 
-    y_axis="PCA_2", 
-    title="PCA scatterplot by Governance Category", 
-    hue="Governance Categories"
-)
+```python
+categorical_countplot(
+    df, 
+    "kmean_labels", 
+    "MSCI_rating", 
+    hue_order=["aaa","aa","bbb","bb","b","ccc"],
+    filename="MSCI_cat_aff.png")
+```
+
+```python
+categorical_countplot(
+    df, 
+    "kmean_labels", 
+    "MSCI Category", 
+    hue_order=["a","b","c"], 
+    filename="MSCI_cat_aff.png")
+```
+
+```python
+model, X_train, X_test, y_train, y_test = train_random_forest(
+    X, 
+    y, 
+    params, 
+    test_size=0.2, 
+    with_labels=True, 
+    labels="aff_labels",)
+```
+
+```python
+y_pred = model.predict(X_test)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=False)
+```
+
+```python
+confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ### Bibliography:
