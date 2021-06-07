@@ -440,6 +440,10 @@ df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"
 ```
 
 ```python
+print(f"{X_rf.shape[1]} features:  {list(X_rf.columns)}")
+```
+
+```python
 #X = np.array(pd.read_csv("../inputs/X_pca.csv"))
 #X = np.array(pd.read_csv("../inputs/X_kpca.csv"))
 scaler = StandardScaler()
@@ -1098,7 +1102,7 @@ model, X_train, X_test, y_train, y_test = train_random_forest(
     params, 
     test_size=0.2, 
     with_labels=True, 
-    labels="aff_labels",)
+    labels="mkmean_labels",)
 ```
 
 ```python
@@ -1113,7 +1117,7 @@ confusion_mat_df(model, y_test, y_pred, percent=False)
 confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
-From this confusion matrix, we see that catagory A is predicted very well from SFDR metrics + mkmeans labels.
+From this confusion matrix, we see that category A is predicted very well from SFDR metrics + mkmeans labels.
 
 ```python
 best_model = model
@@ -1121,14 +1125,12 @@ best_model = model
 
 ```python
 n_features = 15
-
 importances = pd.DataFrame(list(X_train.columns))
 importances["feature_importances"] = best_model.feature_importances_
 importances.columns = ["features", "importances"]
 importances = importances.sort_values(by=["importances"], ascending=False).reset_index().copy()
 importances.loc[:, "features":"importances"].plot(kind="barh")
 plt.yticks(ticks=range(n_features), labels=importances[:n_features]["features"])
-plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
 plt.show()
 ```
 
