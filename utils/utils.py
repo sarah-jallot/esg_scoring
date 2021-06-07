@@ -32,6 +32,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
+import scipy.stats as ss
 
 import pandas as pd
 import os, json
@@ -82,7 +83,24 @@ def countplot(df, category, filename, figsize=(10, 6)):
     plt.show()
 
 
-def scatterplot(df, x_axis, y_axis, hue, title):
+def categorical_countplot(df, x_axis="kmean_labels", hue="ESG Category", hue_order=["A", "B", "C", "D"], filename="ESG_cat_kmeans.png"):
+    plt.figure(figsize=(17, 8))
+    chart = sns.countplot(
+        x=x_axis,
+        hue=hue,
+        data=df,
+        palette="husl",
+        hue_order= hue_order
+    )
+    for p in chart.patches:
+        chart.annotate("%.0f" % p.get_height(), (p.get_x() + p.get_width() / 2., p.get_height()),
+                       ha='center', va='center', fontsize=10, color='black', xytext=(0, 5),
+                       textcoords='offset points')
+    plt.title(f"{hue} repartition by {x_axis} cluster.")
+    plt.savefig('images/' + filename)
+    plt.show()
+
+def scatterplot(df, x_axis, y_axis, hue, title, filename):
     sns.scatterplot(
         data=df,
         x=df.loc[:, x_axis],
@@ -92,6 +110,7 @@ def scatterplot(df, x_axis, y_axis, hue, title):
         legend="full")
     plt.title(title)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig("images/"+filename)
     plt.show()
 
 
@@ -114,7 +133,7 @@ def corrplot(df, filename, vmax=1, title="Correlation matrix for SFDR metrics"):
     plt.savefig('images/' + filename)
     plt.show()
 
-def catplot(df, columns=["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"], figsize=(10,0.5)):
+def catplot(df, columns=["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"], figsize=(10,0.5), order=[""]):
     sns.catplot(
         x=columns[0],
         hue=columns[1],
@@ -122,7 +141,8 @@ def catplot(df, columns=["ESG Score Grade", "GICS Sector Name", "Fundamental Hum
         data=df,
         kind="count",
         height=figsize[0],
-        aspect=figsize[1])
+        aspect=figsize[1],
+        order=order)
     plt.show()
 
 ## Data preprocessing
@@ -576,3 +596,32 @@ def confusion_mat_df(model, y_test, y_pred, percent=False):
     confusion_mat.columns = model.classes_
     confusion_mat.index = model.classes_
     return confusion_mat
+
+
+# Stats
+def cramers_stat(df, cat1, cat2):
+    # Chi-squared test statistic, sample size, and minimum of rows and columns
+    confusion_matrix = np.array(pd.crosstab(df[cat1], df[cat2]))
+    X2 = ss.chi2_contingency(confusion_matrix, correction=False)[0]
+    n = np.sum(confusion_matrix)
+    phi2 = X2 / n
+    minDim = min(confusion_matrix.shape) - 1
+    # calculate Cramer's V
+    V = np.sqrt((phi2) / minDim)
+    return V
+
+
+def cramers_corrected_stat(df, cat1, cat2):
+    """ calculate Cramers V statistic for categorial-categorial association.
+        uses correction from Bergsma and Wicher,
+        Journal of the Korean Statistical Society 42 (2013): 323-328
+    """
+    confusion_matrix = np.array(pd.crosstab(df[cat1], df[cat2]))
+    X2 = ss.chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum()
+    phi2 = X2 / n
+    r, k = confusion_matrix.shape
+    phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+    rcorr = r - ((r - 1) ** 2) / (n - 1)
+    kcorr = k - ((k - 1) ** 2) / (n - 1)
+    return np.sqrt(phi2corr / min((kcorr - 1), (rcorr - 1)))
