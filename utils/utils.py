@@ -591,7 +591,7 @@ def confusion_mat_df(model, y_test, y_pred, percent=False):
     """
     Format the confusion matrix properly.
     """
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}%")
+    print(f"Accuracy: {100*accuracy_score(y_test, y_pred):.2f}%")
     if percent == False:
         confusion_mat = confusion_matrix(y_test, y_pred)
     else:

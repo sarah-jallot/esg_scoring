@@ -236,7 +236,7 @@ Let's train a specific model for clusters 0, 1 and 2.
 
 ```python
 def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="kmean_labels", ):
-    X_trunc = X.loc[:, "Fundamental Human Rights ILO UN":"Bribery, Corruption and Fraud Controversies"]
+    X_trunc = X.loc[:, "Fundamental Human Rights ILO UN":"x0_USA"]
     if with_labels == False:
         X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
     else:
@@ -250,48 +250,98 @@ def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="
 
 ```python
 class Model():
-
-    def __init__:
-        custom_clusters = [0,1,2]
+    def __init__(self, X, y, custom_clusters, params, labels="mkmean_labels"):
+        self.X = X
+        self.y = y
+        self.labels = labels
+        self.custom_clusters = [0,1,2]
+        self.params = params
         
-    def train_test(X,y, test_size=0.4):
-        return train_test_split(X, y, test_size=test_size, random_state=0)
+    def train_test_split(self, test_size=0.4):
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=0)
         
-    def train_model(X_train, y_train, labels, params, test_size=0.4):
-        models = []
-        model = RandomForestClassifier(**params)
-        X_train1 = X_train[X_train[labels].isin(custom_clusters) == False].copy()
-        y_train1 = y_train.iloc[X_train1.index,:].copy()
+    def train_model(self):
+        self.models = []
+        self.X_train = self.X_train.reset_index().drop(columns="index")
+        self.y_train = self.y_train.reset_index().drop(columns="index")
+        model = RandomForestClassifier(**self.params)
+        X_train1 = self.X_train[self.X_train[labels].isin(custom_clusters) == False].copy()
+        y_train1 = self.y_train.iloc[X_train1.index,:].copy()
         model.fit(X_train1, y_train1)
-        models.append(model)
+        self.models.append(model)
         for cluster in custom_clusters:
             model = RandomForestClassifier(**params)
-            mask = (X_train[labels] == cluster)
-            X_train2 = X_train[mask].copy()
-            y_train2 = y_train.iloc[X_train[mask].index, :].copy()
+            mask = (self.X_train[labels] == cluster)
+            X_train2 = self.X_train[mask].copy()
+            y_train2 = self.y_train.iloc[self.X_train[mask].index, :].copy()
             model.fit(X_train2, y_train2)
-            models.append(model)
-        return models
+            self.models.append(model)
             
-    def predict(X_test, y_test, models):
-        y_preds = pd.DataFrame(index=X_test.index, columns=["predictions"])
-        X_test1 =  X_test[X_test[labels].isin(custom_clusters) == False].copy()
-        y_pred1 = models[0].predict(X_test1)
+        classes = list(self.models[0].classes_)
+        for model in self.models:
+            classes.extend(list(model.classes_))
+            self.classes_ = sorted(list(set(classes)))
+            
+    def predict(self):
+        self.X_test = self.X_test.reset_index().drop(columns="index")
+        self.y_test = self.y_test.reset_index().drop(columns="index")
+        y_preds = pd.DataFrame(index=self.X_test.index, columns=["predictions"])
+        X_test1 =  self.X_test[self.X_test[labels].isin(custom_clusters) == False].copy()
+        y_pred1 = self.models[0].predict(X_test1)[:,np.newaxis]
         y_preds.iloc[X_test1.index, :] = y_pred1.copy()
         
-        for cluster in custom_clusters:
-            index = custom_clusters.index(cluster)
-            mask = (X_test[labels] == cluster)
-            X_test2 = X_train[mask].copy()
-            y_pred2 = models[index].predict(X_test2)
+        for cluster in self.custom_clusters:
+            index = self.custom_clusters.index(cluster)
+            mask = (self.X_test[labels] == cluster)
+            X_test2 = self.X_test[mask].copy()
+            y_pred2 = self.models[index].predict(X_test2)[:,np.newaxis]
             y_preds.iloc[X_test2.index, :] = y_pred2
-        return y_preds    
+        
+        self.y_preds = y_preds["predictions"]
+        self.y_test = self.y_test['ESG Score Grade']
+        self.accuracy = (self.y_test == self.y_preds).sum().sum()/ len(self.y_test)
 ```
 
 ```python
-rf_classifier = Model()
+X.head()
 ```
 
 ```python
-rf_classifier.train_model()
+y = simplify_categories(y)
+```
+
+```python
+rf_clf = Model(X, y, custom_clusters ,params)
+```
+
+```python
+rf_clf.train_test_split(test_size=0.4)
+```
+
+```python
+rf_clf.train_model()
+```
+
+```python
+rf_clf.predict()
+```
+
+```python
+X_test, y_test, y_pred = rf_clf.X_test, rf_clf.y_test, rf_clf.y_preds
+```
+
+```python
+confusion_mat_df(rf_clf, y_test, y_pred)
+```
+
+```python
+confusion_matrix_labels(X, "mkmean_labels", X_test, y_pred, y_test, percent=False)
+```
+
+```python
+confusion_matrix_labels(X, "mkmean_labels", X_test, y_pred, y_test, percent=True)
+```
+
+```python
+
 ```
