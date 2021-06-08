@@ -468,11 +468,98 @@ kmeans_kwargs = {
 ```
 
 ```python
-sse = kmeans(X, kmeans_kwargs, upper=50, plot=True)
+def kmeans_cramer(X, kmeans_kwargs, categories, upper=10, plot=True, corrected=False):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the Cramers values for each k
+    cramers = []
+    cramers_corrected = []
+    lower = 1
+    for k in range(lower, upper):
+        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+        kmeans.fit(X)
+        df = pd.DataFrame(categories)
+        df["labels"] = kmeans.labels_
+        df.columns = ["ESG Category","kmean_labels"]
+        cramers.append(cramers_stat(df, "kmean_labels", 'ESG Category'))
+        cramers_corrected.append(cramers_stat(df, "kmean_labels", 'ESG Category'))
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        if corrected == True:
+            plt.plot(range(lower + 1, upper + 1), cramers_corrected)
+            plt.title("Elbow graph for KMeans - Cramers Corrected")
+        else:
+            plt.plot(range(lower + 1, upper + 1), cramers)
+            plt.title("Elbow graph for KMeans - Cramers")
+        plt.xticks(range(lower + 1, upper + 1), rotation=45)
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("Cramers")
+        plt.savefig('images/elbow_graph_kmeans_cramers.png')
+        plt.show()
+    return cramers
+
+
+def m_kmeans_cramer(X, categories, upper=10, plot=True, corrected=False):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the Cramers values for each k
+    cramers = []
+    cramers_corrected = []
+    lower = 1
+    for k in range(lower, upper):
+        model = MiniBatchKMeans(n_clusters=k)
+        model.fit(X)
+        df = pd.DataFrame(categories)
+        df["labels"] = model.labels_
+        df.columns = ["ESG Category","mkmean_labels"]
+        cramers.append(cramers_stat(df, "mkmean_labels", 'ESG Category'))
+        cramers_corrected.append(cramers_corrected_stat(df, "mkmean_labels", 'ESG Category'))
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        if corrected == True:
+            plt.plot(range(lower + 1, upper + 1), cramers_corrected)
+            plt.title("Elbow graph for MKMeans - Cramers Corrected")
+        else:
+            plt.plot(range(lower + 1, upper + 1), cramers)
+            plt.title("Elbow graph for MKMeans - Cramers")
+        plt.xticks(range(lower + 1, upper + 1))
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for Mini-batch KMeans")
+        plt.show()
+        plt.savefig('images/elbow_graph_mkmeans_cramer.png')
+        plt.show()
+    return cramers
 ```
 
 ```python
-optimal_nb = 10
+sse = kmeans(X, kmeans_kwargs, categories=prep_df["ESG Category"], upper=50, plot=True)
+```
+
+```python
+cramers = kmeans_cramer(X, kmeans_kwargs, prep_df["ESG Category"], upper=50, plot=True, corrected=False)
+```
+
+```python
+optimal_nb = 2
 optimal_kmeans = KMeans(n_clusters=optimal_nb, **kmeans_kwargs)
 optimal_kmeans.fit(X)
 ```
@@ -510,7 +597,11 @@ sse = m_kmeans(X, upper=50, plot=True)
 ```
 
 ```python
-optimal_nb = 10
+cramers = m_kmeans_cramer(X, prep_df["ESG Category"], upper=50, plot=True, corrected=False)
+```
+
+```python
+optimal_nb = 15
 optimal_mkmeans = MiniBatchKMeans(n_clusters=optimal_nb)
 optimal_mkmeans.fit(X)
 ```

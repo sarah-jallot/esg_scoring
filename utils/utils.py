@@ -505,7 +505,7 @@ def plot_kpca(kpca, kpca_features, percent=False, cumsum=False):
             plt.show()
 
 
-def kmeans(X, kmeans_kwargs, upper=10, plot=True):
+def kmeans(X, kmeans_kwargs, categories, upper=10, plot=True):
     """
     Run the kmeans algorithm for various numbers of clusters.
     Plot the elbow graph to find the optimal k.
@@ -518,6 +518,7 @@ def kmeans(X, kmeans_kwargs, upper=10, plot=True):
     """
     # A list holds the SSE values for each k
     sse = []
+    cramers = []
     lower = 1
     for k in range(lower, upper):
         kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
@@ -574,8 +575,8 @@ def simplify_categories(series):
 def simplify_msci_categories(series):
     return series.apply(lambda x: x[0])
 
-def train_random_forest(X, y, params, test_size=0.4, with_labels=False, labels="kmean_labels", ):
-    X_trunc = X.loc[:, "Fundamental Human Rights ILO UN":"Bribery, Corruption and Fraud Controversies"]
+def train_random_forest(X, y, features, params, test_size=0.4, with_labels=False, labels="kmean_labels", ):
+    X_trunc = X.loc[:, features].copy()
     if with_labels == False:
         X_train, X_test, y_train, y_test = train_test_split(X_trunc, y, test_size=test_size, random_state=0)
     else:
@@ -600,6 +601,19 @@ def confusion_mat_df(model, y_test, y_pred, percent=False):
     confusion_mat.columns = model.classes_
     confusion_mat.index = model.classes_
     return confusion_mat
+
+
+def confusion_matrix_labels(X, labels, X_test, y_pred, y_test, percent=False):
+    """
+    Get the confusion matrix by cluster.
+    """
+    df_test = X_test.copy()
+    df_test["is_correct"] = 1 - (y_pred != y_test) * 1
+    if percent == True:
+        matrix = pd.crosstab(X.loc[X_test.index, labels], df_test["is_correct"]).T
+        return matrix / matrix.sum()
+    else:
+        return pd.crosstab(X.loc[X_test.index, labels], df_test["is_correct"]).T
 
 def confusion_matrix_labels_category(X, labels, X_test, y_pred, y_test, percent=False):
     """
