@@ -601,6 +601,21 @@ def confusion_mat_df(model, y_test, y_pred, percent=False):
     confusion_mat.index = model.classes_
     return confusion_mat
 
+def confusion_matrix_labels_category(X, labels, X_test, y_pred, y_test, percent=False):
+    """
+    Get the confusion matrix by cluster by category.
+    """
+    df_test = X_test.copy()
+    df_test["is_correct"] = 1 - 1*(y_pred != y_test)*1
+    df_test["ESG Category"] = y_test.copy()
+    df_test[labels] = X.loc[X_test.index, labels]
+    df_test = pd.DataFrame(df_test.groupby(by=["ESG Category",labels,  "is_correct"]).count().loc[:,labels+"_0"])
+    if percent == True:
+        df_test.columns = ["percent"]
+        return df_test / df_test.sum(axis=0)
+    else:
+        df_test.columns = ["count"]
+        return df_test
 
 # Stats
 def cramers_stat(df, cat1, cat2):
