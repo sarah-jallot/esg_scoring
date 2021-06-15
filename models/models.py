@@ -4,8 +4,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-
-
+from sklearn.neighbors import KNeighborsClassifier
 
 class LogReg():
     def __init__(self, X, y, params):
@@ -25,6 +24,25 @@ class LogReg():
         self.y_pred = self.model.predict(self.X_test)
         self.accuracy_ = (self.y_pred == self.y_test) / len(self.y_test)
 
+
+
+class KNN():
+    def __init__(self, X, y, params):
+        self.model = KNeighborsClassifier(**params)
+        self.X = X
+        self.y = y
+        self.classes_ = sorted(list(y.value_counts().index))
+
+    def train_test_split(self, test_size=0.4):
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=test_size,
+                                                                                random_state=0)
+
+    def train_model(self):
+        self.model.fit(self.X_train, self.y_train)
+
+    def predict(self):
+        self.y_pred = self.model.predict(self.X_test)
+        self.accuracy_ = (self.y_pred == self.y_test) / len(self.y_test)
 
 class RuleModel():
     def __init__(self, X, y, custom_clusters, params, labels="mkmean_labels"):

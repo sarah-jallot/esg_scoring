@@ -57,6 +57,8 @@ from sklearn.mixture import GaussianMixture
 from sklearn.cluster import MeanShift
 from sklearn.cluster import OPTICS
 
+from sklearn.neighbors import KNeighborsClassifier
+
 pp = PrettyPrinter(indent=2)
 ```
 
@@ -160,12 +162,50 @@ confusion_mat_df(logreg, y_test, y_pred, percent=False)
 confusion_mat_df(logreg, y_test, y_pred, percent=True)
 ```
 
+#### b) KNN benchmark
+
+```python
+params = {
+    "n_neighbors":15,
+    "weights":"uniform",
+    "leaf_size":15,
+}
+```
+
+```python
+knn = KNN(X_logreg, y, params)
+```
+
+```python
+knn.train_test_split(test_size=0.2)
+```
+
+```python
+knn.train_model()
+```
+
+```python
+knn.predict()
+```
+
+```python
+y_test, y_pred = knn.y_pred, knn.y_test
+```
+
+```python
+confusion_mat_df(knn, y_test, y_pred, percent=False)
+```
+
+```python
+confusion_mat_df(knn, y_test, y_pred, percent=True)
+```
+
 #### b) Random Forests
 
 ```python
 params = {
     "n_estimators":200, 
-    "max_depth":10,
+    "max_depth":5,
 }
 ```
 
@@ -186,17 +226,17 @@ confusion_mat_df(model, y_test, y_pred, percent=True)
 ```
 
 ```python
-pp.pprint(list(X.columns[-3:]))
+pp.pprint(list(X.columns[-10:]))
 ```
 
 ```python
-labels = list(X.columns[-3:])
+labels = list(X.columns[-10:])
 for label in labels:
     print(f"Cramer's coeff {label} : {cramers_stat(df, label, 'ESG Category'):.2f} | Corrected coeff {label} : {cramers_corrected_stat(df, label, 'ESG Category'):.2f}")
 ```
 
 ```python
-labels = "mkmean_labels"
+labels = "kmean_labels"
 test_size = 0.2
 ```
 
@@ -270,7 +310,7 @@ y = simplify_categories(y)
 ```python
 params = {
     "n_estimators":200, 
-    "max_depth":10,
+    "max_depth":5,
 }
 ```
 
@@ -302,4 +342,64 @@ confusion_mat_df(rf_clf, y_test, y_pred)
 
 ```python
 confusion_mat_df(rf_clf, y_test, y_pred, percent=True)
+```
+
+#### Cross-validation
+
+```python
+from sklearn.model_selection import GridSearchCV
+```
+
+```python
+input_path = "../inputs/"
+x_path = "X_rf_labelled.csv"
+y_path = "universe_df_encoded.csv"
+```
+
+```python
+X = pd.read_csv(input_path+x_path)
+y = pd.read_csv(input_path+y_path).loc[:,"ESG Score Grade"]
+```
+
+```python
+y = simplify_categories(y)
+```
+
+#### a) Random Forest Classifier
+
+```python
+param_grid = {
+    "n_estimators": [100,200,300,400,500],
+    "max_depth": [5,10,15,20],
+}
+
+
+#param_grid = {
+#    "n_neighbors":[5,10,15,20,50],
+#    "weights":["uniform","distance"],
+#    "leaf_size":[15,30,50,75,100]
+#}
+rf_clf = RandomForestClassifier()
+knn = KNeighborsClassifier()
+```
+
+```python
+#clf = GridSearchCV(knn, param_grid, n_jobs=-1)
+clf = GridSearchCV(rf_clf, param_grid, n_jobs=-1)
+```
+
+```python
+clf.fit(X,y)
+```
+
+```python
+clf.cv_results_.keys()
+```
+
+```python
+clf.best_estimator_
+```
+
+```python
+
 ```

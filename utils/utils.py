@@ -48,20 +48,22 @@ def boxplot(df, columns, filename, categorical=True, figsize=(10, 8)):
     print(f"Boxplot for {len(data)} datapoints out of {len(df)} overall.")
 
     fig, ax = plt.subplots(figsize=figsize)
-    plt.setp(ax.get_xticklabels(), rotation=45)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
     if categorical == True:
+        my_order = data.groupby(by=[columns[0]])[columns[1]].median().iloc[::-1].index
         sns.boxplot(
             x=columns[0],
             y=columns[1],
-            data=data
+            data=data,
+            order=my_order
         )
-        plt.savefig('images/' + filename)
+        plt.savefig('images/' + filename, bbox_inches='tight')
     else:
         sns.boxplot(
             y=columns[1],
-            data=data
+            data=data,
         )
-        plt.savefig('images/' + filename)
+        plt.savefig('images/' + filename, bbox_inches='tight')
 
 
 def countplot(df, category, filename, figsize=(10, 6)):
@@ -69,7 +71,7 @@ def countplot(df, category, filename, figsize=(10, 6)):
     Countplot for the category of your choice.
     """
     fig, ax = plt.subplots(figsize=figsize)
-    plt.setp(ax.get_xticklabels(), rotation=45)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
     chart = sns.countplot(
         x=category,
         data=df,
@@ -79,7 +81,7 @@ def countplot(df, category, filename, figsize=(10, 6)):
                        ha='center', va='center', fontsize=10, color='black', xytext=(0, 5),
                        textcoords='offset points')
     plt.title(f"Countplot by {category}")
-    plt.savefig('images/'+filename)
+    plt.savefig('images/'+filename, bbox_inches='tight')
     plt.show()
 
 
@@ -97,7 +99,7 @@ def categorical_countplot(df, x_axis="kmean_labels", hue="ESG Category", hue_ord
                        ha='center', va='center', fontsize=10, color='black', xytext=(0, 5),
                        textcoords='offset points')
     plt.title(f"{hue} repartition by {x_axis} cluster.")
-    plt.savefig('images/' + filename)
+    plt.savefig('images/' + filename, bbox_inches='tight')
     plt.show()
 
 def scatterplot(df, x_axis, y_axis, hue, title, filename):
@@ -110,7 +112,7 @@ def scatterplot(df, x_axis, y_axis, hue, title, filename):
         legend="full")
     plt.title(title)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("images/"+filename)
+    plt.savefig("images/"+filename, bbox_inches='tight')
     plt.show()
 
 
@@ -130,7 +132,7 @@ def corrplot(df, filename, vmax=1, title="Correlation matrix for SFDR metrics"):
                 linewidths=.5,
                 cbar_kws={"shrink": .5})
     plt.title(title)
-    plt.savefig('images/' + filename)
+    plt.savefig('images/' + filename, bbox_inches='tight')
     plt.show()
 
 def catplot(df, columns=["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"], figsize=(10,0.5), order=[""]):
@@ -271,6 +273,7 @@ def random_forest_selection(X_train, X_test, y_train, y_test, threshold=0.3):
 
     mask = importances["importances"] > threshold
     n_features = len(importances[mask])
+    print(importances[mask].loc[:, "features":"importances"])
     importances[mask].loc[:, "features":"importances"].plot(kind="barh")
     plt.yticks(ticks=range(n_features), labels=importances[:n_features]["features"])
     plt.title(f"Top {n_features} feature importance for threshold of {threshold}")
@@ -567,6 +570,87 @@ def m_kmeans(X, upper=10, plot=True):
         plt.savefig('images/elbow_graph_mkmeans.png')
         plt.show()
     return sse
+
+def kmeans_cramer(X, kmeans_kwargs, categories, upper=10, plot=True, corrected=False):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the Cramers values for each k
+    cramers = []
+    cramers_corrected = []
+    lower = 1
+    for k in range(lower, upper):
+        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+        kmeans.fit(X)
+        df = pd.DataFrame(categories)
+        df["labels"] = kmeans.labels_
+        df.columns = ["ESG Category","kmean_labels"]
+        cramers.append(cramers_stat(df, "kmean_labels", 'ESG Category'))
+        cramers_corrected.append(cramers_stat(df, "kmean_labels", 'ESG Category'))
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        if corrected == True:
+            plt.plot(range(lower + 1, upper + 1), cramers_corrected)
+            plt.title("Elbow graph for KMeans - Cramers Corrected")
+        else:
+            plt.plot(range(lower + 1, upper + 1), cramers)
+            plt.title("Elbow graph for KMeans - Cramers")
+        plt.xticks(range(lower + 1, upper + 1), rotation=45)
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("Cramers")
+        plt.savefig('images/elbow_graph_kmeans_cramers.png')
+        plt.show()
+    return cramers
+
+
+def m_kmeans_cramer(X, categories, upper=10, plot=True, corrected=False):
+    """
+    Run the kmeans algorithm for various numbers of clusters.
+    Plot the elbow graph to find the optimal k.
+    X: normalised features to perform clustering on.
+    kmeans_kwargs: dictionary containing your kmeans arguments.
+    upper: the maximal number of clusters to test.
+    plot: boolean indicating whether to plot the elbow graph.
+
+    :returns: the sse as a list.
+    """
+    # A list holds the Cramers values for each k
+    cramers = []
+    cramers_corrected = []
+    lower = 1
+    for k in range(lower, upper):
+        model = MiniBatchKMeans(n_clusters=k)
+        model.fit(X)
+        df = pd.DataFrame(categories)
+        df["labels"] = model.labels_
+        df.columns = ["ESG Category","mkmean_labels"]
+        cramers.append(cramers_stat(df, "mkmean_labels", 'ESG Category'))
+        cramers_corrected.append(cramers_corrected_stat(df, "mkmean_labels", 'ESG Category'))
+    if plot == True:
+        plt.style.use("fivethirtyeight")
+        plt.figure(figsize=(15, 5))
+        if corrected == True:
+            plt.plot(range(lower + 1, upper + 1), cramers_corrected)
+            plt.title("Elbow graph for MKMeans - Cramers Corrected")
+        else:
+            plt.plot(range(lower + 1, upper + 1), cramers)
+            plt.title("Elbow graph for MKMeans - Cramers")
+        plt.xticks(range(lower + 1, upper + 1))
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("SSE")
+        plt.title("Elbow graph for Mini-batch KMeans")
+        plt.show()
+        plt.savefig('images/elbow_graph_mkmeans_cramer.png')
+        plt.show()
+    return cramers
 
 
 def simplify_categories(series):

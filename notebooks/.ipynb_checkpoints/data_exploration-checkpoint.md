@@ -205,6 +205,14 @@ pp.pprint(list(df.columns))
 print(f"Our dataframe presents {df.shape[1]-6} SFDR-related metrics.")
 ```
 
+```python
+df.head()
+```
+
+```python
+df.shape
+```
+
 #### Geographic repartition. 
 
 
@@ -231,14 +239,21 @@ Here we see Industrials over-represented in our dataset along with Financials.
 
 ```python
 columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df, columns,  filename="market_cap_sector.png", categorical=False, figsize=(6,6))
+boxplot(df, columns,  filename="market_cap_sector.png", categorical=True, figsize=(6,6))
 ```
 
 ```python
 upper = 100
-mask = df["Market Capitalization (bil) [USD]"] < upper
 columns = ["GICS Sector Name","Market Capitalization (bil) [USD]"]
-boxplot(df[mask], columns,  filename="market_cap_100_sector.png", categorical=False, figsize=(6,6))
+mask = df[columns[1]] < upper
+boxplot(df[mask], columns,  filename="market_cap_100_sector.png", categorical=True, figsize=(6,6))
+```
+
+```python
+upper = 7500
+columns = ["GICS Sector Name","Accidents Total"]
+mask = df[columns[1]] < upper
+boxplot(df[mask], columns,  filename="accidents_sector_7500.png", categorical=True, figsize=(6,6))
 ```
 
 #### Boxplots by variable / field
@@ -471,7 +486,7 @@ drop_cols = [
     "Name",
     "Symbol",
     "Country",
-    "Industry Name - GICS Sub-Industry",
+  #  "Industry Name - GICS Sub-Industry",
     "SEDOL",
     "ISINS",
     "GICS Sector Name",
@@ -496,449 +511,6 @@ cluster_df.head()
 ```python
 cluster_df.to_csv("../inputs/universe_clusters.csv", index=False)
 ```
-
-#### a) PCA
-
-```python
-threshold = 0.8
-method = "cumsum"
-```
-
-```python
-full_pca_features, pca, selected_features = pca_selection(cluster_df, threshold=threshold, method=method)
-print(f"We selected {selected_features.shape[1]} out of {full_pca_features.shape[1]} features for the {method} method with a threshold of {threshold} .")
-```
-
-```python
-ticks = list(range(pca.n_components))[::10]
-labels = [x for x in ticks]
-
-figure(figsize=(10,4))
-plt.plot(pca.explained_variance_,)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("PCA feature selection")
-plt.savefig("images/PCA_feature_selection.png")
-plt.show()
-```
-
-```python
-figure(figsize=(10,4))
-plt.plot(pca.explained_variance_ratio_)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance %")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("PCA feature selection, explained variance in %")
-plt.savefig("images/PCA_feature_selection_percent.png")
-plt.show()
-```
-
-```python
-prep_df["PCA_1"] = pd.Series(full_pca_features[:,0])
-prep_df["PCA_2"] = pd.Series(full_pca_features[:,1])
-scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot", hue=None)
-```
-
-```python
-scatterplot(prep_df, x_axis="PCA_1", y_axis="PCA_2", title="PCA scatterplot by sector", hue="GICS Sector Name")
-```
-
-```python
-X_pca = selected_features
-pd.DataFrame(X_pca).to_csv("../inputs/X_pca.csv", index=False)
-```
-
-### Kernel PCA 
-Applying a kernel to make the data linearly separable by PCA. 
-
-```python
-threshold = 0.8
-n_components = 200
-kernel = "rbf"
-method = "cumsum"
-```
-
-```python
-full_kpca_features, kpca, selected_kpca_features = kpca_selection(cluster_df, n_components=n_components, kernel=kernel, threshold=threshold, method=method)
-print(f"We selected {selected_kpca_features.shape[1]} out of {full_kpca_features.shape[1]} features for the {method} method with a threshold of {threshold} .")
-```
-
-```python
-ticks = list(range(kpca.n_components))[::10]
-labels = [x for x in ticks]
-explained_variance = np.var(full_kpca_features, axis=0)
-explained_variance_ratio = explained_variance / np.sum(explained_variance)
-
-figure(figsize=(10,4))
-plt.plot(explained_variance,)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("Kernel PCA feature selection")
-plt.show()
-```
-
-```python
-figure(figsize=(10,4))
-plt.plot(explained_variance_ratio)
-plt.xlabel("Number of components")
-plt.ylabel("Explained variance %")
-plt.xticks(ticks=ticks, labels=labels)
-plt.title("Kernel PCA feature selection")
-plt.show()
-```
-
-```python
-plt.scatter(x=full_kpca_features[:,0], y=full_kpca_features[:,1])
-plt.title("Kernel PCA feature scatterplot")
-plt.show()
-```
-
-```python
-prep_df["KPCA_1"] = pd.Series(full_kpca_features[:,0])
-prep_df["KPCA_2"] = pd.Series(full_kpca_features[:,1])
-```
-
-```python
-X_kpca = selected_kpca_features
-pd.DataFrame(X_kpca).to_csv("../inputs/X_kpca.csv", index=False)
-```
-
-### Random Forest
-
-
-We train a Random Forest to predict the ESG Score as a function of our SFDR metrics, and use a threshold feature importance to select relevant features.  
-
-```python
-threshold = 0.005
-X, y = cluster_df.copy(), prep_df["ESG Score"].copy()
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
-```
-
-```python
-importances, masked_importances, r2_full, r2_imp = random_forest_selection(
-    X_train, 
-    X_test, 
-    y_train, 
-    y_test, 
-    threshold=threshold
-)
-print(f"Full R2 score: {r2_full:.2f} versus score after feature selection: {r2_imp:.2f}.")
-```
-
-Observations: 
-- The two most important features to predict Refinitiv ESG scoring are **governance related** and concern the implementation of a **Human Rights Policy** within the organization.  
-- **Market Capitalization** comes third. This could point to a bias within the data towards capitalization. We know that bigger companies have more resources dedicated to transparency, and that on material issues, Refinitiv applies transparency weights. They might be biased by capitalization even with their corrections.  
-- We observe several occurrences of **CO2 Equivalent Emissions** as a total and by scope 1, 2 and 3, as well as CO2 intensity. It could be interesting to keep only one or two of these variables as they seem close (to be confirmed).  
-- Some variables within our best predictors presented limited coverage : Hazardous Waste for example has 70% missing values.
-
-
-Let's have a look at the countplot within the initial dataframe for Fundamental Human Rights policies:
-
-```python
-countplot(df,category="Fundamental Human Rights ILO UN", filename="human_rights.png", )
-print(df["Fundamental Human Rights ILO UN"].value_counts()/df["Fundamental Human Rights ILO UN"].value_counts().sum())
-```
-
-```python
-df.groupby("Fundamental Human Rights ILO UN").mean().loc[:,["Market Capitalization (bil) [USD]", "ESG Score"]]
-```
-
-```python
-columns = ["ESG Score Grade", "GICS Sector Name", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
-```
-
-It would seem that only 34% of our investees have signed the Fundamental Human Rights ILO UN Convention.
-
-```python
-upper = 10
-mask = df["Market Capitalization (bil) [USD]"] < upper
-scatterplot(
-    df[mask], 
-    x_axis="Market Capitalization (bil) [USD]", 
-    y_axis="ESG Score", 
-    title="ESG Score as a function of Market Cap",
-    hue=None
-)
-```
-
-```python
-scatterplot(
-    df, 
-    x_axis="Board Gender Diversity, Percent", 
-    y_axis="ESG Score", 
-    title="ESG Score as a function of Board gender diversity, %",
-    hue=None
-)
-```
-
-```python
-mask = df["Salary Gap"] < 500
-
-scatterplot(
-    df[mask], 
-    x_axis="Salary Gap", 
-    y_axis="ESG Score", 
-    title="ESG Score as a function of Salary Gap",
-    hue=None
-)
-```
-
-Let's have a look at a scatterplot for an environmental indicator: 
-
-```python
-scatterplot(
-    df, 
-    x_axis="CO2 Equivalent Emissions Indirect, Scope 2", 
-    y_axis="ESG Score", 
-    title="ESG Score as a function of Scope 2 Carbon Emissions",
-    hue=None
-)
-```
-
-We can assume that the best-in-class notation makes CO2 emissions a rather bad overall predictor, as it is mostly linked to the industry. 
-
-```python
-mask = importances.importances > threshold
-X_rf = cluster_df.loc[:,importances[mask].features]
-pd.DataFrame(X_rf).to_csv("../inputs/X_rf.csv", index=False)
-X_rf_target = X_rf.copy()
-X_rf_target["ESG Score"] = prep_df["ESG Score"].copy()
-X_rf_target.head()
-```
-
-We plot correlations for X_rf including the target variable, our ESG Score.
-
-```python
-corrplot(
-    X_rf_target, 
-    filename = "corrplot_random_forest.png",
-    vmax=1, 
-    title="Correlation matrix for Random Forest selected features"
-)
-```
-
-Coming from the USA is slightly negatively correlated to ESG Scoring. We could infer that American companies perform less well than European ones according to Refinitiv, although they are overrepresented in our dataset.
-
-```python
-pillars = [pillar_mapping.get(key) for key in X_rf.columns]
-pillars = list(filter(lambda a: a != "Other", pillars))
-pillars = list(filter(lambda a: a != "Target", pillars))
-sns.countplot(pillars, order=dict(Counter(pillars).most_common()).keys())
-plt.title("Pillar count for most important features in our Random Forest.")
-plt.show()
-
-for key in dict(Counter(pillars)).keys():
-    print(f"{key}: {dict(Counter(pillars))[key]/sum(list(Counter(pillars).values()))*100:.1f} percent")
-```
-
-Environmental metrics are over-represented within our dataset versus original metrics. We see that coming from the USA is used as a predictor in ESG Scoring, a relationship we will investigate.
-
-```python
-scatterplot(
-    X_rf, 
-    x_axis="Board Gender Diversity, Percent", 
-    y_axis="Market Capitalization (bil) [USD]", 
-    title="Random Forest Feature Selection",
-    hue=None
-)
-```
-
-```python
-scatterplot(
-    X_rf, 
-    x_axis="Board Gender Diversity, Percent", 
-    y_axis="Market Capitalization (bil) [USD]", 
-    hue="Fundamental Human Rights ILO UN", 
-    title="Scatterplot"
-)
-```
-
-### Autoencoder
-
-```python
-# to do 
-```
-
-### Clustering
-
-```python
-# Utils
-
-def kmeans(X, kmeans_kwargs, upper=10, plot = True):
-    """
-    Run the kmeans algorithm for various numbers of clusters. 
-    Plot the elbow graph to find the optimal k. 
-    X: normalised features to perform clustering on. 
-    kmeans_kwargs: dictionary containing your kmeans arguments. 
-    upper: the maximal number of clusters to test. 
-    plot: boolean indicating whether to plot the elbow graph. 
-    
-    :returns: the sse as a list. 
-    """
-    # A list holds the SSE values for each k
-    sse = []
-    for k in range(1, upper):
-        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-        kmeans.fit(X)
-        sse.append(kmeans.inertia_)
-    if plot == True: 
-        plt.style.use("fivethirtyeight")
-        plt.figure(figsize=(15,5))
-        plt.plot(range(lower+1, upper+1), sse)
-        plt.xticks(range(lower+1, upper+1), rotation=45)
-        plt.xlabel("Number of Clusters")
-        plt.ylabel("SSE")
-        plt.title("Elbow graph for KMeans")
-        plt.savefig('images/elbow_graph.png')
-        plt.show()
-    return sse
-
-```
-
-As such, cluster analysis is an iterative process where subjective evaluation of the identified clusters is fed back into changes to algorithm configuration until a desired or appropriate result is achieved.
-
-
-Our dimensionality reduction process pushes us to retain the 18 features from the Random Forest Algorithm.
-
-```python
-#X = np.array(pd.read_csv("../inputs/X_pca.csv"))
-#X = np.array(pd.read_csv("../inputs/X_kpca.csv"))
-scaler = StandardScaler()
-X = scaler.fit_transform(np.array(pd.read_csv("../inputs/X_rf.csv")))
-```
-
-#### K-means
-
-
-Assign examples to each cluster while trying to minimize the variance within each cluster. Let's perform the elbow method to determine the optimal number of clusters.
-
-```python
-kmeans_kwargs = {
-    "init": "random",
-    "n_init": 10,
-    "max_iter": 300,
-    "random_state": 42,
-}
-```
-
-```python
-sse = kmeans(X, kmeans_kwargs, upper=60, plot=True)
-```
-
-Based on this elbow graph, we select 30 as the optimal number of clusters.
-
-```python
-optimal_nb = 20
-```
-
-```python
-optimal_kmeans = KMeans(n_clusters=optimal_nb, **kmeans_kwargs)
-optimal_kmeans.fit(X)
-```
-
-```python
-prep_df["kmean_labels"] = optimal_kmeans.labels_
-X_rf["kmean_labels"] = optimal_kmeans.labels_
-```
-
-```python
-X_rf["kmean_labels"].value_counts()
-```
-
-To run our data exploration, we perform it on the initial dataframe. 
-
-```python
-df.shape
-```
-
-```python
-df = pd.read_csv("../inputs/universe_df_no_nans.csv").drop(columns=["Unnamed: 0"])
-df.loc[:,"kmean_labels"] = X_rf.loc[:,"kmean_labels"]
-```
-
-```python
-columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
-```
-
-```python
-columns = ["kmean_labels","Board Gender Diversity, Percent"]
-boxplot(df, columns, filename="gender_div_kmeans.png", categorical=True, figsize=(10,6))
-```
-
-```python
-columns = ["kmean_labels","Total CO2 Equivalent Emissions To Revenues USD in million"]
-boxplot(df, columns, filename="co2_emissions_kmeans.png", categorical=True, figsize=(10,6))
-```
-
-```python
-columns = ["ESG Score Grade", "kmean_labels", "GICS Sector Name"]
-catplot(df, columns, figsize=(11,0.5))
-```
-
-```python
-columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
-catplot(df, columns, figsize=(11,0.5))
-```
-
-#### Mini-batch Kmeans
-
-```python
-# define the model
-sse = []
-for k in range(lower, upper):
-    model = MiniBatchKMeans(n_clusters=k)
-    model.fit(X)
-    sse.append(model.inertia_)
-```
-
-```python
-plt.style.use("fivethirtyeight")
-#plt.figsize((10,8))
-plt.plot(range(lower+1, upper+1), sse)
-plt.xticks(range(lower+1, upper+1))
-plt.xlabel("Number of Clusters")
-plt.ylabel("SSE")
-plt.title("Elbow graph for Mini-batch KMeans")
-plt.show()
-```
-
-```python
-optimal_nb = 7
-```
-
-```python
-optimal_mkmeans = MiniBatchKMeans(n_clusters=optimal_nb)
-# fit the model
-optimal_mkmeans.fit(X)
-# assign a cluster to each example
-yhat = optimal_mkmeans.predict(X)
-```
-
-```python
-prep_df["mkmean_labels"] = optimal_mkmeans.labels_
-X_rf["mkmean_labels"] = optimal_mkmeans.labels_
-```
-
-```python
-X_rf["mkmean_labels"].value_counts()
-```
-
-```python
-scatterplot(
-    prep_df, 
-    "KPCA_1", 
-    "KPCA_2", 
-    "mkmean_labels", 
-    "KPCA coloured by Mini-kmeans"
-)
-```
-
-#### Affinity propagation
-
 
 Affinity propagation finds "exemplars," members of the input set that are representative of clusters.
 
@@ -1282,10 +854,6 @@ plt.show()
 
 ```python
 countplot(pred_df,"MSCI_rating", filename="ESG_score_distribution.png")
-```
-
-```python
-
 ```
 
 ```python
