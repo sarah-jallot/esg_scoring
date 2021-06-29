@@ -950,6 +950,86 @@ df = pd.read_csv("../inputs/prep_df_labelled.csv")
 df.head()
 ```
 
+First, let us see whether our clustering is affected by the GICS Sector. This would mean that with our Random Forest Features, we allocate companies according to their field. 
+
+```python
+order = ["A", "B", "C", "D"]
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "ESG Category", 
+    order,
+    filename="GICS_cat_mkmean.png")
+```
+
+```python
+cramers_stat(df, 'mkmean_labels', 'GICS Sector Name')
+```
+
+```python
+
+```
+
+```python
+
+```
+
+```python
+order = list(df["GICS Sector Name"].value_counts().index)
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "GICS Sector Name", 
+    order,
+  #  ["A","B","C","D"], 
+    filename="GICS_cat_mkmean.png")
+```
+
+```python
+order = list(df["Fundamental Human Rights ILO UN"].value_counts().index)
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "Fundamental Human Rights ILO UN", 
+    order,
+  #  ["A","B","C","D"], 
+    filename="Human_Rights_cat_mkmean.png")
+```
+
+```python
+cramers_stat(df, 'ESG Category', 'Fundamental Human Rights ILO UN')
+```
+
+```python
+cramers_stat(df, 'mkmean_labels', 'Fundamental Human Rights ILO UN')
+```
+
+```python
+order = list(df["Human Rights Policy"].value_counts().index)
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "Human Rights Policy", 
+    order,
+  #  ["A","B","C","D"], 
+    filename="Human_Rights_cat_mkmean.png")
+```
+
+```python
+cramers_stat(df, 'mkmean_labels', 'Human Rights Policy')
+```
+
+```python
+order = list(df["Fundamental Human Rights ILO UN"].value_counts().index)
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "Fundamental Human Rights ILO UN", 
+    order,
+  #  ["A","B","C","D"], 
+    filename="Human_Rights_cat_mkmean.png")
+```
+
 ```python
 columns = ["ESG Score Grade", "kmean_labels", "Fundamental Human Rights ILO UN"]
 catplot(df, columns, figsize=(11,0.5))

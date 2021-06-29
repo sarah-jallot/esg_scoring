@@ -151,15 +151,15 @@ logreg.predict()
 ```
 
 ```python
-y_test, y_pred = logreg.y_pred, logreg.y_test
+y_test, y_pred_logreg = logreg.y_pred, logreg.y_test
 ```
 
 ```python
-confusion_mat_df(logreg, y_test, y_pred, percent=False)
+confusion_mat_df(logreg, y_test, y_pred_logreg, percent=False)
 ```
 
 ```python
-confusion_mat_df(logreg, y_test, y_pred, percent=True)
+confusion_mat_df(logreg, y_test, y_pred_logreg, percent=True)
 ```
 
 #### b) KNN benchmark
@@ -189,15 +189,15 @@ knn.predict()
 ```
 
 ```python
-y_test, y_pred = knn.y_pred, knn.y_test
+y_test, y_pred_knn = knn.y_pred, knn.y_test
 ```
 
 ```python
-confusion_mat_df(knn, y_test, y_pred, percent=False)
+confusion_mat_df(knn, y_test, y_pred_knn, percent=False)
 ```
 
 ```python
-confusion_mat_df(knn, y_test, y_pred, percent=True)
+confusion_mat_df(knn, y_test, y_pred_knn, percent=True)
 ```
 
 #### b) Random Forests
@@ -214,15 +214,15 @@ model, X_train, X_test, y_train, y_test = train_random_forest(X, y, features, pa
 ```
 
 ```python
-y_pred = model.predict(X_test)
+y_pred_rf = model.predict(X_test)
 ```
 
 ```python
-confusion_mat_df(model, y_test, y_pred, percent=False)
+confusion_mat_df(model, y_test, y_pred_rf, percent=False)
 ```
 
 ```python
-confusion_mat_df(model, y_test, y_pred, percent=True)
+confusion_mat_df(model, y_test, y_pred_rf, percent=True)
 ```
 
 ```python
@@ -236,7 +236,7 @@ for label in labels:
 ```
 
 ```python
-labels = "kmean_labels"
+labels = "mkmean_labels"
 test_size = 0.2
 ```
 
@@ -250,7 +250,7 @@ categorical_countplot(
 ```
 
 ```python
-confusion_matrix_labels(X, "mkmean_labels", X_test, y_pred, y_test, percent=False)
+confusion_matrix_labels(X, "mkmean_labels", X_test, y_pred_rf, y_test, percent=False)
 ```
 
 ```python
@@ -265,43 +265,61 @@ model, X_train, X_test, y_train, y_test = train_random_forest(
 ```
 
 ```python
-y_pred = model.predict(X_test)
+y_pred_rf_labels = model.predict(X_test)
 ```
 
 ```python
-confusion_mat_df(model, y_test, y_pred, percent=False)
+confusion_mat_df(model, y_test, y_pred_rf_labels, percent=False)
 ```
 
 Here, you can see that our confidence interval for A and D is better than for B and C: A gets confused with B and D with C. This isn't surprising as they are extreme classes, potentially more recognisable.  
 However, it would seem that D is he least well predicted class all the same : in one case out of two, it is not recognised as D and classified in C. 
 
 ```python
-confusion_mat_df(model, y_test, y_pred, percent=True)
+confusion_mat_df(model, y_test, y_pred_rf_labels, percent=True)
 ```
 
 Let's investigate our predictions by label group:
 
 ```python
-confusion_matrix_labels(X, labels, X_test, y_pred, y_test, percent=False)
+confusion_matrix_labels(X, labels, X_test, y_pred_rf_labels, y_test, percent=False)
 ```
 
 If we look at predictions by group, it seems that classes 1 and two are our least well predicted classes.  
 On the other hand, classes five, zero and eight present good accuracy. 
 
 ```python
-confusion_matrix_labels(X, labels, X_test, y_pred, y_test, percent=True)
+confusion_matrix_labels(X, labels, X_test, y_pred_rf_labels, y_test, percent=True)
 ```
 
 We now investigate the results by ESG category and by cluster. 
 We know that we should pay attention to classes 1 and 2 first.
 
 ```python
-confusion_matrix_labels_category(X, labels, X_test, y_pred, y_test, percent=False)
+confusion_matrix_labels_category(X, labels, X_test, y_pred_rf_labels, y_test, percent=False)
 ```
 
 Here we see that cluster 1 made a bad predictor of class A, but a good predictor of class B. Same for cluster 2, it is a bad predictor of class A.  
 0 is a bad predictor for class B, but an excellent one for C, so it balances out in the final accuracy. 
 Let's train a specific model for clusters 0, 1 and 2.
+
+```python
+categorical_countplot(
+    df, 
+    "mkmean_labels", 
+    "ESG Category", 
+    ["A","B","C","D"], 
+    filename="ESG_cat_dbscan.png")
+```
+
+```python
+old_labels = "kmean_labels"
+features.pop(features.index(old_labels))
+new_labels = "mkmean_labels"
+features.append(new_labels)
+X = df.loc[:,features]
+X.columns
+```
 
 ```python
 y = simplify_categories(y)
@@ -315,9 +333,13 @@ params = {
 ```
 
 ```python
-custom_clusters = []
+custom_clusters = [2,3,12]
 test_size = 0.2
-rf_clf = RuleModel(X, y, custom_clusters ,params)
+rf_clf = RuleModel(X, y, custom_clusters ,params, labels=new_labels)
+```
+
+```python
+X.columns
 ```
 
 ```python
@@ -333,15 +355,15 @@ rf_clf.predict()
 ```
 
 ```python
-X_test, y_test, y_pred = rf_clf.X_test, rf_clf.y_test, rf_clf.y_preds
+X_test, y_test, y_pred_rule = rf_clf.X_test, rf_clf.y_test, rf_clf.y_preds
 ```
 
 ```python
-confusion_mat_df(rf_clf, y_test, y_pred)
+confusion_mat_df(rf_clf, y_test, y_pred_rule)
 ```
 
 ```python
-confusion_mat_df(rf_clf, y_test, y_pred, percent=True)
+confusion_mat_df(rf_clf, y_test, y_pred_rule, percent=True)
 ```
 
 #### Cross-validation
@@ -357,12 +379,16 @@ y_path = "universe_df_encoded.csv"
 ```
 
 ```python
-X = pd.read_csv(input_path+x_path)
+X = pd.read_csv(input_path+x_path).loc[:, features]
 y = pd.read_csv(input_path+y_path).loc[:,"ESG Score Grade"]
 ```
 
 ```python
 y = simplify_categories(y)
+```
+
+```python
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=0)
 ```
 
 #### a) Random Forest Classifier
@@ -371,6 +397,9 @@ y = simplify_categories(y)
 param_grid = {
     "n_estimators": [100,200,300,400,500],
     "max_depth": [5,10,15,20],
+    "min_samples_split":[2,5,10,20],
+    "max_features": ["auto", "sqrt", "log2"],
+    "class_weight":[None, "balanced"]
 }
 
 
@@ -389,15 +418,74 @@ clf = GridSearchCV(rf_clf, param_grid, n_jobs=-1)
 ```
 
 ```python
-clf.fit(X,y)
+#clf.fit(X_train,y_train)
 ```
 
 ```python
-clf.cv_results_.keys()
+#clf.cv_results_.keys()
 ```
 
 ```python
-clf.best_estimator_
+#clf.best_estimator_
+```
+
+```python
+best_params = {
+    "n_estimators": 400,
+    "max_depth": 5,
+    "min_samples_split":20,
+    "max_features":  "log2",
+    "class_weight":None,
+    
+}
+
+best_rf = RandomForestClassifier(**best_params)
+```
+
+```python
+best_rf.fit(X_train, y_train)
+```
+
+```python
+y_pred = best_rf.predict(X_test)
+```
+
+```python
+confusion_mat_df(best_rf, y_test, y_pred, percent=True)
+```
+
+```python
+features.append("mkmean_labels")
+```
+
+```python
+X = pd.read_csv(input_path+x_path).loc[:, features]
+```
+
+```python
+custom_clusters = [1,2,3]
+test_size = 0.2
+best_rule_rf_clf = RuleModel(X, y, custom_clusters ,best_params)
+```
+
+```python
+best_rule_rf_clf.train_test_split(test_size=test_size)
+```
+
+```python
+best_rule_rf_clf.train_model()
+```
+
+```python
+best_rule_rf_clf.predict()
+```
+
+```python
+X_test, y_test, y_pred = best_rule_rf_clf.X_test, best_rule_rf_clf.y_test, best_rule_rf_clf.y_preds
+```
+
+```python
+confusion_mat_df(best_rule_rf_clf, y_test, y_pred)
 ```
 
 ```python

@@ -357,12 +357,16 @@ y_path = "universe_df_encoded.csv"
 ```
 
 ```python
-X = pd.read_csv(input_path+x_path)
+X = pd.read_csv(input_path+x_path).loc[:, features]
 y = pd.read_csv(input_path+y_path).loc[:,"ESG Score Grade"]
 ```
 
 ```python
 y = simplify_categories(y)
+```
+
+```python
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=0)
 ```
 
 #### a) Random Forest Classifier
@@ -371,6 +375,9 @@ y = simplify_categories(y)
 param_grid = {
     "n_estimators": [100,200,300,400,500],
     "max_depth": [5,10,15,20],
+    "min_samples_split":[2,5,10,20],
+    "max_features": ["auto", "sqrt", "log2"],
+    "class_weight":[None, "balanced"]
 }
 
 
@@ -389,7 +396,7 @@ clf = GridSearchCV(rf_clf, param_grid, n_jobs=-1)
 ```
 
 ```python
-clf.fit(X,y)
+clf.fit(X_train,y_train)
 ```
 
 ```python
@@ -401,5 +408,60 @@ clf.best_estimator_
 ```
 
 ```python
+best_params = {
+    "n_estimators": 400,
+    "max_depth": 5,
+    "min_samples_split":20,
+    "max_features":  "log2",
+    "class_weight":None,
+    
+}
 
+best_rf = RandomForestClassifier(**best_params)
+```
+
+```python
+best_rf.fit(X_train, y_train)
+```
+
+```python
+y_pred = best_rf.predict(X_test)
+```
+
+```python
+confusion_mat_df(best_estimator, y_test, y_pred, percent=True)
+```
+
+```python
+features.append("mkmean_labels")
+```
+
+```python
+X = pd.read_csv(input_path+x_path).loc[:, features]
+```
+
+```python
+custom_clusters = []
+test_size = 0.2
+best_rule_rf_clf = RuleModel(X, y, custom_clusters ,best_params)
+```
+
+```python
+best_rule_rf_clf.train_test_split(test_size=test_size)
+```
+
+```python
+best_rule_rf_clf.train_model()
+```
+
+```python
+best_rule_rf_clf.predict()
+```
+
+```python
+X_test, y_test, y_pred = best_rule_rf_clf.X_test, best_rule_rf_clf.y_test, best_rule_rf_clf.y_preds
+```
+
+```python
+confusion_mat_df(best_rule_rf_clf, y_test, y_pred)
 ```

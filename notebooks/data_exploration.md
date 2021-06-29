@@ -232,8 +232,12 @@ Consider that for data processing purposes, when retrieving Thompson-Reuters dat
 countplot(df,"GICS Sector Name", filename="sector_distribution.png", figsize=(8,8))
 ```
 
-Here we see Industrials over-represented in our dataset along with Financials.
+Here we see Industrials over-represented in our dataset along with Financials. Let's investigate whether the data's ESG category and it's sector name vary together. 
 
+```python
+initial_df["ESG Category"] = simplify_categories(initial_df["ESG Score Grade"])
+cramers_stat(initial_df, 'ESG Category', 'GICS Sector Name')
+```
 
 #### Market Capitalization
 
@@ -270,6 +274,37 @@ boxplot(df, columns,  filename="board_gender_div_sector.png", categorical=False,
 ```python
 columns = ["GICS Sector Name","CO2 Equivalent Emissions Total"]
 boxplot(df, columns, filename="CO2_equivalent_total_sector.png", categorical=True, figsize=(10,6))
+```
+
+```python
+df["GICS Sector Name"].value_counts().index
+```
+
+```python
+df[df["GICS Sector Name"] == "Industrials"]["CO2 Equivalent Emissions Total"]
+```
+
+```python
+df2[df2['GICS Sector Name'] == 'Industrials']['CO2 Equivalent Emissions Total'].dropna()
+```
+
+```python
+import scipy.stats as stats
+
+df2 = df.copy()
+
+stats.f_oneway(df2[df2['GICS Sector Name'] == 'Industrials']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Financials']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Consumer Discretionary']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Information Technology']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Health Care']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Materials']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Real Estate']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Communication Services']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Consumer Staples']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Utilities']['CO2 Equivalent Emissions Total'].dropna(),
+               df2[df2['GICS Sector Name'] == 'Energy']['CO2 Equivalent Emissions Total'].dropna(),
+              )
 ```
 
 Energy, Materials and Utilities present a higher average CO2 emissions total than other industries, with quite a few outliers towards the higher extreme.
@@ -844,6 +879,15 @@ pred_df.head()
 
 ```python
 countplot(pred_df,"ESG Score Grade", filename="ESG_score_distribution.png")
+```
+
+```python
+pred_df["ESG Category"] = simplify_categories(pred_df["ESG Score Grade"])
+countplot(pred_df,"ESG Category", filename="ESG_score_distribution.png")
+```
+
+```python
+pred_df["ESG Category"].value_counts()/pred_df["ESG Category"].value_counts().sum()
 ```
 
 ```python
